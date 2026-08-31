@@ -1,0 +1,469 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .photo-card { position: relative; border-radius: 16px; overflow: hidden; background: #f8fafc; border: 1px solid #e2e8f0; transition: box-shadow 0.2s; }
+    .photo-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+    .photo-card img { width: 100%; height: 160px; object-fit: cover; display: block; }
+    .photo-card .photo-actions { padding: 10px 12px; background: white; }
+    .upload-zone {
+        border: 2px dashed #cbd5e1; border-radius: 16px; padding: 40px 20px;
+        text-align: center; cursor: pointer; transition: all 0.2s;
+        background: #f8fafc;
+    }
+    .upload-zone:hover, .upload-zone.dragover { border-color: #0d6efd; background: #eff6ff; }
+    .upload-zone input[type=file] { display: none; }
+    .form-section { background: white; border-radius: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); padding: 28px; margin-bottom: 20px; }
+    .section-title { font-size: 1rem; font-weight: 700; color: #374151; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #f1f5f9; }
+</style>
+
+{# ── Flash messages ── #}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 2000;">
+      {% for category, message in messages %}
+        <div class="toast align-items-center text-white bg-{{ 'success' if category == 'success' else 'danger' if category == 'danger' else 'warning' }} border-0 show mb-2" role="alert" aria-live="assertive" aria-atomic="true">
+          <div class="d-flex">
+            <div class="toast-body fw-semibold">{{ message }}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<div class="row justify-content-center mt-3">
+    <div class="col-xl-9">
+
+        {# ── En-tête ── #}
+        <div class="d-flex align-items-center gap-3 mb-4">
+            <a href="/admin#salles" class="btn btn-outline-secondary rounded-pill px-4">
+                <i class="bi bi-arrow-left"></i> Salles
+            </a>
+            <div>
+                <h3 class="fw-bold mb-0">
+                    <i class="bi bi-building text-primary"></i> {{ infos.nom_complet }}
+                    {% if not salle.actif %}
+                        <span class="badge bg-secondary ms-2">Inactive</span>
+                    {% endif %}
+                </h3>
+                <span class="text-muted small">Identifiant : <code>{{ nom_salle }}</code></span>
+            </div>
+        </div>
+
+        <div class="row g-4">
+
+            {# ══ COLONNE GAUCHE : Informations générales ══ #}
+            <div class="col-lg-6">
+
+                <div class="form-section">
+                    <div class="section-title"><i class="bi bi-pencil-square text-primary me-2"></i>Informations générales</div>
+
+                    <form method="POST">
+                        <input type="hidden" name="action" value="update_infos">
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">Nom complet</label>
+                            <input type="text" class="form-control rounded-3" name="nom_complet"
+                                   value="{{ infos.nom_complet }}" placeholder="Ex: Salle TP Informatique 101" maxlength="100" required>
+                            <div class="form-text">Nom affiché sur toutes les pages.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">Capacité (places)</label>
+                            <input type="number" class="form-control rounded-3" name="places"
+                                   value="{{ infos.places_int if infos.places_int is not none else '' }}"
+                                   placeholder="Ex: 30" min="1" max="9999">
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label fw-semibold small">Étage</label>
+                                <select class="form-select rounded-3" name="etage">
+                                    {% for e in range(0, 6) %}
+                                    <option value="{{ e }}" {{ 'selected' if infos.get('etage', '0') | string == e | string else '' }}>
+                                        {{ 'RDC' if e == 0 else 'Étage ' + e|string }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold small">Aile</label>
+                                <select class="form-select rounded-3" name="aile">
+                                    <option value="gauche" {{ 'selected' if infos.get('aile') == 'gauche' else '' }}>Gauche</option>
+                                    <option value="droite" {{ 'selected' if infos.get('aile') == 'droite' else '' }}>Droite</option>
+                                    <option value="centre" {{ 'selected' if infos.get('aile') == 'centre' else '' }}>Centre</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">Description</label>
+                            <textarea class="form-control rounded-3" name="description" rows="3"
+                                      maxlength="500" placeholder="Décrivez la salle, son usage, ses particularités...">{{ infos.description or '' }}</textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small"><i class="bi bi-link-45deg text-success"></i> URL iCalendar distante (ENT)</label>
+
+                            {% if infos.ical_url %}
+                            {# URL déjà configurée : afficher masquée + bouton pour modifier #}
+                            <div class="d-flex gap-2 align-items-center mb-2">
+                                <div class="form-control rounded-3 font-monospace bg-light text-muted flex-grow-1"
+                                     style="font-size:0.82rem; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;"
+                                     title="URL masquée — cliquez sur Modifier pour la changer">
+                                    <i class="bi bi-lock-fill text-success me-1"></i>
+                                    {{ infos.ical_url_masked }}
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-secondary rounded-3 flex-shrink-0"
+                                        onclick="toggleIcalEdit()" id="btnEditIcal">
+                                    <i class="bi bi-pencil"></i> Modifier
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger rounded-3 flex-shrink-0"
+                                        onclick="clearIcalUrl()" title="Supprimer l'URL iCal">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+                            <div id="icalEditZone" style="display:none;">
+                                <input type="url" class="form-control rounded-3 font-monospace" name="ical_url"
+                                       id="icalUrlInput"
+                                       placeholder="Collez la nouvelle URL iCal ENT ici…">
+                                <div class="form-text text-warning">
+                                    <i class="bi bi-exclamation-triangle-fill"></i>
+                                    Laissez vide pour conserver l'URL actuelle. Une nouvelle valeur remplacera l'ancienne.
+                                </div>
+                            </div>
+                            {# Champ caché envoyé quand on ne modifie pas : valeur vide = "ne pas toucher" #}
+                            {# La route Flask doit ignorer ical_url='' si le champ édition est masqué #}
+                            {% else %}
+                            {# Pas d'URL configurée : champ de saisie classique #}
+                            <input type="url" class="form-control rounded-3 font-monospace" name="ical_url"
+                                   id="icalUrlInput"
+                                   placeholder="https://ent.universite.fr/calendar/salle.ics">
+                            {% endif %}
+
+                            <div class="form-text">Prioritaire sur le fichier local. L'URL est récupérée toutes les 60 secondes.</div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold small"><i class="bi bi-file-earmark-text text-secondary"></i> Fichier ICS local (fallback)</label>
+                            <input type="text" class="form-control rounded-3 font-monospace" name="ical_file"
+                                   value="{{ infos.ical_file or '' }}"
+                                   placeholder="Ex: 101.ics">
+                            <div class="form-text">Fichier dans le dossier <code>salleICS/</code>. Utilisé si l'URL est absente ou en erreur.</div>
+                        </div>
+
+                        {# ── Site de rattachement ── #}
+                        {% if not current_user.is_site_admin() %}
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">
+                                <i class="bi bi-geo-alt-fill text-primary me-1"></i>Site de rattachement
+                            </label>
+                            <select class="form-select rounded-3" name="site_id">
+                                <option value="__NONE__" {% if not salle.get('site_id') %}selected{% endif %}>
+                                    — Aucun site (non rattachée) —
+                                </option>
+                                {% for site in all_sites %}
+                                <option value="{{ site.id }}"
+                                    {% if salle.get('site_id') == site.id %}selected{% endif %}
+                                    style="border-left: 3px solid {{ site.couleur }};">
+                                    {{ site.nom }}{% if site.adresse %} — {{ site.adresse }}{% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Détermine dans quel campus cette salle apparaît, ainsi que ses horaires et jours d'ouverture (réservations limitées en conséquence). Configurables dans l'onglet <strong>Sites</strong>.</div>
+                        </div>
+                        {% else %}
+                        {# Admin de site : site fixe, non modifiable #}
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">
+                                <i class="bi bi-geo-alt-fill text-primary me-1"></i>Site
+                            </label>
+                            <input type="hidden" name="site_id" value="{{ current_user.site_id }}">
+                            <div class="form-control-plaintext small text-muted ps-1">
+                                {{ current_site.nom if current_site else 'Site assigné' }} <span class="badge bg-secondary ms-1">Fixe</span>
+                                {% if current_site %}
+                                <span class="badge bg-light text-dark border ms-1"><i class="bi bi-clock-history me-1"></i>{{ current_site.heure_ouverture }} – {{ current_site.heure_fermeture }}</span>
+                                <span class="badge bg-light text-dark border ms-1"><i class="bi bi-calendar-week me-1"></i>{{ current_site.jours_ouverture | fmt_jours(abbr=true) }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold small d-block">Équipements</label>
+                            <div class="d-flex gap-3 flex-wrap">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="pc" id="swPC"
+                                           {{ 'checked' if infos.pc else '' }}>
+                                    <label class="form-check-label" for="swPC"><i class="bi bi-pc-display"></i> PC</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="projecteur" id="swProj"
+                                           {{ 'checked' if infos.projecteur else '' }}>
+                                    <label class="form-check-label" for="swProj"><i class="bi bi-projector"></i> Projecteur</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="tableau" id="swTab"
+                                           {{ 'checked' if infos.tableau else '' }}>
+                                    <label class="form-check-label" for="swTab"><i class="bi bi-easel"></i> Tableau</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary rounded-pill fw-bold px-4">
+                            <i class="bi bi-floppy me-1"></i> Enregistrer
+                        </button>
+                    </form>
+                </div>
+
+                {# ── Aperçu ── #}
+                <div class="form-section">
+                    <div class="section-title"><i class="bi bi-eye text-primary me-2"></i>Aperçu actuel</div>
+                    <div class="d-flex gap-2 flex-wrap mb-2">
+                        {% if infos.pc %}
+                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25"><i class="bi bi-pc-display me-1"></i>PC</span>
+                        {% endif %}
+                        {% if infos.projecteur %}
+                            <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25"><i class="bi bi-projector me-1"></i>Projecteur</span>
+                        {% endif %}
+                        {% if infos.tableau %}
+                            <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25"><i class="bi bi-easel me-1"></i>Tableau</span>
+                        {% endif %}
+                    </div>
+                    <div class="row g-2 text-center">
+                        <div class="col-4">
+                            <div class="bg-light rounded-3 p-2">
+                                <div class="fw-bold text-primary">{{ infos.places }}</div>
+                                <div class="text-muted" style="font-size:0.7rem;">places</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="bg-light rounded-3 p-2">
+                                <div class="fw-bold text-primary">{{ infos.get('etage', '0') }}</div>
+                                <div class="text-muted" style="font-size:0.7rem;">étage</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="bg-light rounded-3 p-2">
+                                <div class="fw-bold text-primary">{{ infos.get('aile', '?')|capitalize }}</div>
+                                <div class="text-muted" style="font-size:0.7rem;">aile</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% if infos.description %}
+                    <p class="text-muted small mt-3 mb-0">{{ infos.description }}</p>
+                    {% endif %}
+                    <div class="mt-2 d-flex gap-2 flex-wrap">
+                        {% if infos.ical_url %}
+                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 small">
+                            <i class="bi bi-link-45deg"></i> iCal ENT configuré
+                        </span>
+                        {% endif %}
+                        {% if infos.ical_file %}
+                        <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 small">
+                            <i class="bi bi-file-earmark-text"></i> Fichier local : {{ infos.ical_file }}
+                        </span>
+                        {% endif %}
+                        {% if not infos.ical_url and not infos.ical_file %}
+                        <span class="badge bg-warning text-dark small">
+                            <i class="bi bi-exclamation-triangle"></i> Aucune source ICS configurée
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {# ── Zone danger ── #}
+                <div class="form-section border border-danger border-opacity-25">
+                    <div class="section-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Zone de danger</div>
+
+                    <div class="d-flex gap-2 flex-wrap">
+                        <form method="POST" action="/admin/salle/{{ nom_salle }}/toggle"
+                              onsubmit="return confirm('{{ 'Réactiver' if not salle.actif else 'Désactiver (masquer)' }} la salle {{ nom_salle }} ?')">
+                            <button type="submit" class="btn rounded-pill fw-bold {{ 'btn-outline-success' if not salle.actif else 'btn-outline-secondary' }}">
+                                {% if salle.actif %}
+                                    <i class="bi bi-eye-slash me-1"></i> Désactiver (masquer)
+                                {% else %}
+                                    <i class="bi bi-eye me-1"></i> Réactiver
+                                {% endif %}
+                            </button>
+                        </form>
+
+                        <form method="POST" action="/admin/salle/{{ nom_salle }}/supprimer"
+                              onsubmit="return confirm('⚠️ Supprimer DÉFINITIVEMENT la salle {{ nom_salle }} ? Toutes ses photos seront perdues. Cette action est irréversible.')">
+                            <button type="submit" class="btn btn-danger rounded-pill fw-bold">
+                                <i class="bi bi-trash me-1"></i> Supprimer définitivement
+                            </button>
+                        </form>
+                    </div>
+                    <div class="form-text mt-2 text-danger">
+                        <strong>Désactiver</strong> masque la salle sans supprimer ses données. <strong>Supprimer</strong> est irréversible.
+                    </div>
+                </div>
+
+            </div>
+
+            {# ══ COLONNE DROITE : Galerie photos ══ #}
+            <div class="col-lg-6">
+
+                <div class="form-section">
+                    <div class="section-title">
+                        <i class="bi bi-images text-primary me-2"></i>Galerie photos
+                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 ms-1">{{ photos|length }}</span>
+                    </div>
+
+                    {# ── Zone d'upload ── #}
+                    <form method="POST" action="/admin/salle/{{ nom_salle }}/photo/upload" enctype="multipart/form-data" id="uploadForm">
+                        <div class="upload-zone mb-3" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+                            <input type="file" id="fileInput" name="photos" multiple accept="image/png,image/jpeg,image/gif,image/webp" onchange="previewFiles(this)">
+                            <i class="bi bi-cloud-arrow-up h2 text-primary mb-2 d-block"></i>
+                            <div class="fw-semibold text-dark mb-1">Cliquez ou glissez des photos ici</div>
+                            <div class="text-muted small">PNG, JPG, GIF, WebP — max 5 Mo par fichier</div>
+                        </div>
+
+                        <div id="previewGrid" class="row g-2 mb-3" style="display:none!important;"></div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">Légende commune (optionnelle)</label>
+                            <input type="text" class="form-control rounded-3" name="legende"
+                                   placeholder="Ex: Vue de la salle depuis l'entrée" maxlength="200">
+                        </div>
+
+                        <button type="submit" class="btn btn-primary rounded-pill fw-bold w-100" id="uploadBtn" disabled>
+                            <i class="bi bi-upload me-1"></i> Envoyer les photos
+                        </button>
+                    </form>
+
+                    {% if photos %}
+                    <hr class="my-4">
+                    <h6 class="fw-bold text-muted text-uppercase small mb-3">Photos actuelles</h6>
+                    <div class="row g-3">
+                        {% for photo in photos %}
+                        <div class="col-6">
+                            <div class="photo-card">
+                                <img src="{{ url_for('static', filename='uploads/salles/' + photo.filename) }}"
+                                     alt="{{ photo.legende or nom_salle }}"
+                                     loading="lazy">
+                                <div class="photo-actions">
+                                    <form method="POST" action="/admin/salle/{{ nom_salle }}/photo/{{ photo.id }}/edit" class="mb-2">
+                                        <input type="text" class="form-control form-control-sm rounded-3 mb-1"
+                                               name="legende" value="{{ photo.legende }}"
+                                               placeholder="Légende..." maxlength="200">
+                                        <div class="d-flex gap-1">
+                                            <input type="number" class="form-control form-control-sm rounded-3" name="ordre"
+                                                   value="{{ photo.ordre }}" min="0" max="999" style="width: 70px;" title="Ordre d'affichage">
+                                            <button type="submit" class="btn btn-sm btn-outline-primary rounded-3 flex-grow-1">
+                                                <i class="bi bi-floppy"></i>
+                                            </button>
+                                        </div>
+                                    </form>
+                                    <form method="POST" action="/admin/salle/{{ nom_salle }}/photo/{{ photo.id }}/delete"
+                                          onsubmit="return confirm('Supprimer cette photo définitivement ?')">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger rounded-3 w-100">
+                                            <i class="bi bi-trash"></i> Supprimer
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="bi bi-image h1 opacity-25"></i>
+                        <p class="mt-2 small">Aucune photo pour cette salle.</p>
+                    </div>
+                    {% endif %}
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    function toggleIcalEdit() {
+        const zone = document.getElementById('icalEditZone');
+        const btn  = document.getElementById('btnEditIcal');
+        if (!zone) return;
+        const visible = zone.style.display !== 'none';
+        zone.style.display = visible ? 'none' : 'block';
+        btn.innerHTML = visible
+            ? '<i class="bi bi-pencil"></i> Modifier'
+            : '<i class="bi bi-x"></i> Annuler';
+        if (!visible) document.getElementById('icalUrlInput')?.focus();
+    }
+
+    function clearIcalUrl() {
+        if (!confirm('Supprimer l\'URL iCal configurée ? La salle n\'aura plus de source distante.')) return;
+        // On injecte un champ caché avec valeur spéciale "__CLEAR__" pour signaler la suppression
+        const form = document.querySelector('form[method="POST"]:not([action])');
+        let hidden = document.getElementById('icalUrlClear');
+        if (!hidden) {
+            hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.name = 'ical_url';
+            hidden.id   = 'icalUrlClear';
+            form.appendChild(hidden);
+        }
+        hidden.value = '__CLEAR__';
+        // Désactiver l'autre input pour éviter le doublon
+        const input = document.getElementById('icalUrlInput');
+        if (input) input.disabled = true;
+        form.submit();
+    }
+
+    const uploadZone = document.getElementById('uploadZone');
+    ['dragenter', 'dragover'].forEach(evt => {
+        uploadZone.addEventListener(evt, (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+    });
+    ['dragleave', 'drop'].forEach(evt => {
+        uploadZone.addEventListener(evt, (e) => { e.preventDefault(); uploadZone.classList.remove('dragover'); });
+    });
+    uploadZone.addEventListener('drop', (e) => {
+        const input = document.getElementById('fileInput');
+        input.files = e.dataTransfer.files;
+        previewFiles(input);
+    });
+
+    function previewFiles(input) {
+        const previewGrid = document.getElementById('previewGrid');
+        const uploadBtn   = document.getElementById('uploadBtn');
+        previewGrid.innerHTML = '';
+
+        if (!input.files || input.files.length === 0) {
+            previewGrid.style.setProperty('display', 'none', 'important');
+            uploadBtn.disabled = true;
+            return;
+        }
+
+        previewGrid.style.removeProperty('display');
+        Array.from(input.files).forEach(file => {
+            const col = document.createElement('div');
+            col.className = 'col-4';
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                col.innerHTML = `
+                    <div style="border-radius:10px; overflow:hidden; aspect-ratio:4/3; background:#f1f5f9;">
+                        <img src="${e.target.result}" style="width:100%; height:100%; object-fit:cover;" alt="${file.name}">
+                    </div>
+                    <div class="text-muted mt-1" style="font-size:0.65rem; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${file.name}</div>
+                `;
+            };
+            reader.readAsDataURL(file);
+            previewGrid.appendChild(col);
+        });
+
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = `Envoyer ${input.files.length} photo${input.files.length > 1 ? 's' : ''}`;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.toast').forEach(toastEl => {
+            setTimeout(() => bootstrap.Toast.getOrCreateInstance(toastEl).hide(), 4000);
+        });
+    });
+</script>
+{% endblock %}

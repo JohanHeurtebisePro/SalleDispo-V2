@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="row justify-content-center g-4">
+    <div class="col-lg-7 col-xl-6">
+
+        {# ── CARTE IDENTITÉ ── #}
+        <div class="glass rounded-4 p-4 mb-4">
+            <div class="d-flex align-items-center gap-4">
+                <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                     style="width: 90px; height: 90px;">
+                    <i class="bi bi-person-fill" style="font-size: 3rem;"></i>
+                </div>
+                <div class="flex-grow-1 min-w-0">
+                    <h3 class="fw-bold mb-1 text-truncate">{{ user.nom_complet }}</h3>
+                    <div class="text-muted small mb-2">@{{ user.username }}</div>
+                    {% if user.promotion %}
+                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill px-3 py-2">
+                            <i class="bi bi-mortarboard-fill me-1"></i>{{ user.promotion }}
+                        </span>
+                    {% else %}
+                        <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill px-3 py-2">
+                            Aucune promotion renseignée
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# ── INFOS DU COMPTE ── #}
+        <div class="glass rounded-4 p-4 mb-4">
+            <h6 class="fw-bold mb-3 text-uppercase text-muted" style="font-size: 0.72rem; letter-spacing: 1px;">
+                <i class="bi bi-person-vcard me-2"></i>Informations du compte
+            </h6>
+            <ul class="list-group list-group-flush">
+                {% if user.email %}
+                <li class="list-group-item bg-transparent px-0 d-flex align-items-center gap-3 py-3">
+                    <div class="bg-primary bg-opacity-10 text-primary rounded-3 d-flex align-items-center justify-content-center flex-shrink-0"
+                         style="width: 40px; height: 40px;">
+                        <i class="bi bi-envelope-fill"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted" style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Adresse e-mail</div>
+                        <div class="fw-semibold">{{ user.email }}</div>
+                    </div>
+                </li>
+                {% endif %}
+                {% if user.numero_etudiant %}
+                <li class="list-group-item bg-transparent px-0 d-flex align-items-center gap-3 py-3">
+                    <div class="bg-info bg-opacity-10 text-info rounded-3 d-flex align-items-center justify-content-center flex-shrink-0"
+                         style="width: 40px; height: 40px;">
+                        <i class="bi bi-card-text"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted" style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Numéro étudiant</div>
+                        <div class="fw-semibold">{{ user.numero_etudiant }}</div>
+                    </div>
+                </li>
+                {% endif %}
+                {% if not current_user.is_admin() %}
+                <li class="list-group-item bg-transparent px-0 d-flex align-items-center gap-3 py-3">
+                    <div class="bg-success bg-opacity-10 text-success rounded-3 d-flex align-items-center justify-content-center flex-shrink-0"
+                         style="width: 40px; height: 40px;">
+                        <i class="bi bi-calendar2-check"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted" style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Réservations à venir</div>
+                        <div class="fw-semibold">{{ resas_futures|length }} réservation{{ 's' if resas_futures|length > 1 }}</div>
+                    </div>
+                    <a href="/mes-reservations" class="btn btn-sm btn-outline-secondary rounded-pill ms-auto px-3">
+                        <i class="bi bi-arrow-right me-1"></i>Voir
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </div>
+
+        {# ── ALERTES ── #}
+        {% if success %}
+        <div class="alert alert-success rounded-4 border-0 py-2 px-3 small fw-semibold mb-3">
+            <i class="bi bi-check-circle-fill me-1"></i>{{ success }}
+        </div>
+        {% endif %}
+        {% if error %}
+        <div class="alert alert-danger rounded-4 border-0 py-2 px-3 small fw-semibold mb-3">
+            <i class="bi bi-exclamation-circle-fill me-1"></i>{{ error }}
+        </div>
+        {% endif %}
+
+        {# ── CHANGER MOT DE PASSE ── #}
+        <div class="glass rounded-4 p-4 mb-4">
+            <div class="d-flex align-items-start gap-3 mb-3">
+                <div class="bg-warning bg-opacity-10 text-warning rounded-3 d-flex align-items-center justify-content-center flex-shrink-0"
+                     style="width: 42px; height: 42px;">
+                    <i class="bi bi-shield-lock-fill"></i>
+                </div>
+                <div>
+                    <h6 class="fw-bold mb-1">Changer de mot de passe</h6>
+                    <p class="text-muted small mb-0">Saisissez votre mot de passe actuel puis choisissez-en un nouveau.</p>
+                </div>
+            </div>
+
+            <form method="POST" action="/profil" id="formChangePwd">
+                <input type="hidden" name="action" value="change_password">
+
+                {# Mot de passe actuel #}
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Mot de passe actuel <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="password" class="form-control rounded-start-3" id="current_password"
+                               name="current_password" placeholder="••••••••"
+                               autocomplete="current-password" required>
+                        <button class="btn btn-outline-secondary rounded-end-3" type="button"
+                                onclick="toggleVisi('current_password', this)" tabindex="-1">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                {# Nouveau mot de passe #}
+                <div class="mb-2">
+                    <label class="form-label fw-semibold small">Nouveau mot de passe <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="password" class="form-control rounded-start-3" id="new_password"
+                               name="new_password" placeholder="••••••••"
+                               autocomplete="new-password" required minlength="8"
+                               oninput="checkStrength(this.value)">
+                        <button class="btn btn-outline-secondary rounded-end-3" type="button"
+                                onclick="toggleVisi('new_password', this)" tabindex="-1">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
+                    {# Jauge de force #}
+                    <div class="mt-2" style="height:4px;border-radius:4px;background:var(--bs-border-color);overflow:hidden;">
+                        <div id="strengthFill" style="height:100%;width:0%;border-radius:4px;transition:width .3s,background .3s;"></div>
+                    </div>
+                    <div id="strengthLabel" class="form-text mt-1" style="min-height:16px;"></div>
+                </div>
+
+                {# Confirmation #}
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Confirmer le nouveau mot de passe <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="password" class="form-control rounded-start-3" id="confirm_password"
+                               name="confirm_password" placeholder="••••••••"
+                               autocomplete="new-password" required minlength="8">
+                        <button class="btn btn-outline-secondary rounded-end-3" type="button"
+                                onclick="toggleVisi('confirm_password', this)" tabindex="-1">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-sm btn-warning rounded-pill w-100 fw-bold">
+                    <i class="bi bi-check-lg me-1"></i>Mettre à jour le mot de passe
+                </button>
+            </form>
+        </div>
+
+        {# ── DÉCONNEXION ── #}
+        <div class="glass rounded-4 p-4">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="fw-semibold">Se déconnecter</div>
+                    <div class="text-muted small">Terminer la session en cours.</div>
+                </div>
+                <a href="/logout" class="btn btn-outline-danger rounded-pill px-4">
+                    <i class="bi bi-box-arrow-right me-1"></i>Déconnexion
+                </a>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    function toggleVisi(id, btn) {
+        const input = document.getElementById(id);
+        const icon  = btn.querySelector('i');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.replace('bi-eye', 'bi-eye-slash');
+        } else {
+            input.type = 'password';
+            icon.classList.replace('bi-eye-slash', 'bi-eye');
+        }
+    }
+
+    function checkStrength(pwd) {
+        const fill  = document.getElementById('strengthFill');
+        const label = document.getElementById('strengthLabel');
+        if (!fill) return;
+        let score = 0;
+        if (pwd.length >= 8)  score++;
+        if (pwd.length >= 12) score++;
+        if (/[A-Z]/.test(pwd)) score++;
+        if (/[0-9]/.test(pwd)) score++;
+        if (/[^A-Za-z0-9]/.test(pwd)) score++;
+        const levels = [
+            { pct: '0%',   color: '#e5e7eb', text: '' },
+            { pct: '25%',  color: '#ef4444', text: '🔴 Très faible' },
+            { pct: '50%',  color: '#f97316', text: '🟠 Faible' },
+            { pct: '65%',  color: '#eab308', text: '🟡 Moyen' },
+            { pct: '85%',  color: '#22c55e', text: '🟢 Fort' },
+            { pct: '100%', color: '#10b981', text: '✅ Très fort' },
+        ];
+        const l = levels[Math.min(score, 5)];
+        fill.style.width    = l.pct;
+        fill.style.background = l.color;
+        label.textContent   = l.text;
+    }
+</script>
+
+{% endblock %}

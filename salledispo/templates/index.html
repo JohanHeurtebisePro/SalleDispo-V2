@@ -1,0 +1,515 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+{# ─── FLASH MESSAGES (confirmation signalement, etc.) ─── #}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 2000;">
+      {% for category, message in messages %}
+        <div class="toast align-items-center text-white bg-{{ 'success' if category == 'success' else 'warning' }} border-0 show mb-2" role="alert" aria-live="assertive" aria-atomic="true">
+          <div class="d-flex">
+            <div class="toast-body fw-semibold">{{ message }}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+{# ── Calcul des compteurs ── #}
+{% set libres = namespace(count=0) %}
+{% for s in salles %}
+    {% if s.status.etat == 'LIBRE' %}
+        {% set libres.count = libres.count + 1 %}
+    {% endif %}
+{% endfor %}
+
+<div class="d-flex align-items-center gap-3 mb-4 px-1" style="font-size:0.85rem;">
+    <span class="text-muted fw-semibold">{{ salles|length }} salle{{ 's' if salles|length > 1 }}</span>
+    <span class="text-muted">·</span>
+    <span class="text-success fw-semibold"><i class="bi bi-circle-fill me-1" style="font-size:0.45rem; vertical-align:middle;"></i>{{ libres.count }} libre{{ 's' if libres.count > 1 }}</span>
+    <span class="text-muted">·</span>
+    <span class="text-danger fw-semibold"><i class="bi bi-circle-fill me-1" style="font-size:0.45rem; vertical-align:middle;"></i>{{ salles|length - libres.count }} occupée{{ 's' if salles|length - libres.count > 1 }}</span>
+</div>
+
+
+<div class="row">
+    
+    <div class="col-lg-3 mb-4">
+        <div class="glass rounded-4 p-3 sticky-top" style="top: 90px; z-index: 100;">
+
+            {# ── En-tête : titre + reset ── #}
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="text-muted fw-bold" style="font-size:0.72rem; letter-spacing:0.5px;">FILTRES</span>
+                {% if q or f_pc or f_proj or f_tableau or f_etage or f_aile or f_heure_debut or f_heure_fin or f_duree %}
+                    <a href="/" class="text-danger" style="font-size:0.75rem; text-decoration:none;">
+                        <i class="bi bi-x-circle me-1"></i>Reset
+                    </a>
+                {% endif %}
+            </div>
+
+            {# ── Bouton rapide ── #}
+            <a href="/?duree_min=60" class="btn btn-success w-100 rounded-pill mb-2 fw-bold btn-sm {% if f_duree == '60' and not q and not f_pc and not f_proj and not f_etage and not f_aile %}active{% endif %}">
+                <i class="bi bi-lightning-charge-fill"></i> Libre maintenant
+            </a>
+
+            <form action="/" method="GET" id="searchForm">
+
+                <input type="text" name="q" class="form-control form-control-sm rounded-pill bg-transparent border-secondary mb-2" placeholder="🔍 N° Salle..." value="{{ q or '' }}">
+
+                {# ── Équipements ── #}
+                <div class="mb-2">
+                    <div class="form-check form-switch mb-1">
+                        <input class="form-check-input" type="checkbox" name="pc" id="checkPC" {% if f_pc %}checked{% endif %} onchange="this.form.submit()">
+                        <label class="form-check-label small" for="checkPC">Avec PC</label>
+                    </div>
+                    <div class="form-check form-switch mb-1">
+                        <input class="form-check-input" type="checkbox" name="proj" id="checkProj" {% if f_proj %}checked{% endif %} onchange="this.form.submit()">
+                        <label class="form-check-label small" for="checkProj">Avec Projecteur</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="tableau" id="checkTableau" {% if f_tableau %}checked{% endif %} onchange="this.form.submit()">
+                        <label class="form-check-label small" for="checkTableau">Avec Tableau</label>
+                    </div>
+                </div>
+
+                {# ── Capacité minimale ── #}
+                <div class="mb-2">
+                    <div class="text-muted fw-bold mb-1" style="font-size:0.72rem; letter-spacing:0.5px;">CAPACITÉ MIN.</div>
+                    <div class="d-flex gap-1 flex-wrap" id="capacityBtns">
+                        <button type="button" class="btn btn-sm rounded-pill cap-btn {% if not f_cap %}btn-secondary{% else %}btn-outline-secondary{% endif %}"
+                                data-cap="0" onclick="setCapacity(0)">Tous</button>
+                        <button type="button" class="btn btn-sm rounded-pill cap-btn {% if f_cap == '2' %}btn-secondary{% else %}btn-outline-secondary{% endif %}"
+                                data-cap="2" onclick="setCapacity(2)">2+</button>
+                        <button type="button" class="btn btn-sm rounded-pill cap-btn {% if f_cap == '5' %}btn-secondary{% else %}btn-outline-secondary{% endif %}"
+                                data-cap="5" onclick="setCapacity(5)">5+</button>
+                        <button type="button" class="btn btn-sm rounded-pill cap-btn {% if f_cap == '10' %}btn-secondary{% else %}btn-outline-secondary{% endif %}"
+                                data-cap="10" onclick="setCapacity(10)">10+</button>
+                        <button type="button" class="btn btn-sm rounded-pill cap-btn {% if f_cap == '20' %}btn-secondary{% else %}btn-outline-secondary{% endif %}"
+                                data-cap="20" onclick="setCapacity(20)">20+</button>
+                    </div>
+                    {# Champ caché pour conserver le filtre capacité lors des soumissions form #}
+                    <input type="hidden" name="cap" id="capInput" value="{{ f_cap or '' }}">
+                </div>
+
+                {# ── Créneau exact (heure début / fin) ── #}
+                <div class="mb-2">
+                    <div class="text-muted fw-bold mb-1" style="font-size:0.72rem; letter-spacing:0.5px;">CRÉNEAU EXACT</div>
+                    <div class="d-flex gap-1 align-items-center">
+                        <input type="time" class="form-control form-control-sm rounded-3" name="heure_debut"
+                               id="heureDebut" value="{{ f_heure_debut or '' }}"
+                               style="font-size:0.8rem; min-width:0;">
+                        <span class="text-muted small flex-shrink-0">→</span>
+                        <input type="time" class="form-control form-control-sm rounded-3" name="heure_fin"
+                               id="heureFin" value="{{ f_heure_fin or '' }}"
+                               style="font-size:0.8rem; min-width:0;">
+                        <button type="submit" class="btn btn-primary btn-sm flex-shrink-0">OK</button>
+                    </div>
+                    <div class="form-text" style="font-size:0.68rem;">Salles libres sur ce créneau aujourd'hui.</div>
+                </div>
+
+                <select class="form-select form-select-sm mb-1 rounded-3" name="etage" onchange="this.form.submit()">
+                    <option value="">🏢 Tous les étages</option>
+                    <option value="0" {% if f_etage == '0' %}selected{% endif %}>Rez-de-chaussée</option>
+                    <option value="1" {% if f_etage == '1' %}selected{% endif %}>Étage 1</option>
+                    <option value="2" {% if f_etage == '2' %}selected{% endif %}>Étage 2</option>
+                    <option value="3" {% if f_etage == '3' %}selected{% endif %}>Étage 3</option>
+                    <option value="4" {% if f_etage == '4' %}selected{% endif %}>Étage 4</option>
+                </select>
+
+                <select class="form-select form-select-sm mb-2 rounded-3" name="aile" onchange="this.form.submit()">
+                    <option value="">↔️ Toutes les ailes</option>
+                    <option value="gauche" {% if f_aile == 'gauche' %}selected{% endif %}>Aile Gauche</option>
+                    <option value="droite" {% if f_aile == 'droite' %}selected{% endif %}>Aile Droite</option>
+                </select>
+
+                {# ── Durée libre (mode alternatif au créneau exact) ── #}
+                <div class="input-group input-group-sm mb-2">
+                    <span class="input-group-text" style="font-size:0.72rem;">⏱ min</span>
+                    <input type="number" class="form-control" name="duree_min" placeholder="Durée libre" value="{{ f_duree or '' }}" min="1" max="480">
+                    <button type="submit" class="btn btn-primary btn-sm">OK</button>
+                </div>
+
+                {# ── RÉSUMÉ RÉSERVATIONS ── #}
+                {% set total_resas = mes_reservations|length + resas_invitee|length %}
+                {% if total_resas > 0 %}
+                <div class="border-top pt-2 mt-1">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <span class="text-muted fw-bold" style="font-size:0.72rem; letter-spacing:0.5px;">MES RÉSERVATIONS</span>
+                        <a href="/mes-reservations" class="text-primary" style="font-size:0.72rem; text-decoration:none;">
+                            Voir tout <i class="bi bi-arrow-right"></i>
+                        </a>
+                    </div>
+
+                    {# Prochaine réservation (organisateur) #}
+                    {% if mes_reservations %}
+                    {% set r = mes_reservations[0] %}
+                    <div class="rounded-3 p-2 border mb-1" style="background:#f0fdf4; border-color:#bbf7d0 !important; font-size:0.75rem;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-bold text-success">Salle {{ r.salle }}</span>
+                            <span class="text-muted" style="font-size:0.68rem;">{{ r.date_debut[11:16] }}→{{ r.date_fin[11:16] }}</span>
+                        </div>
+                        <div class="text-muted" style="font-size:0.68rem;">{{ r.date_debut[8:10] }}/{{ r.date_debut[5:7] }}</div>
+                        <div class="text-truncate" style="font-size:0.68rem; color:#166534;" title="{{ r.motif }}">
+                            <i class="bi bi-chat-left-text me-1"></i>{{ r.motif }}
+                        </div>
+                        <div style="font-size:0.68rem; color:#166534;">
+                            <i class="bi bi-people me-1"></i>{{ r.nb_personnes or 1 }} personne{{ 's' if (r.nb_personnes or 1) > 1 }}
+                        </div>
+                        {% if mes_reservations|length > 1 %}
+                        <div class="text-muted" style="font-size:0.66rem;">+{{ mes_reservations|length - 1 }} autre{{ 's' if mes_reservations|length > 2 }}</div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    {# Invitation(s) #}
+                    {% if resas_invitee %}
+                    {% set ri = resas_invitee[0] %}
+                    <div class="rounded-3 p-2 border" style="background:rgba(111,66,193,0.06); border-color:rgba(111,66,193,0.25) !important; font-size:0.75rem;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-bold" style="color:#6f42c1;">Salle {{ ri.salle }}</span>
+                            <span class="text-muted" style="font-size:0.68rem;">{{ ri.date_debut[11:16] }}→{{ ri.date_fin[11:16] }}</span>
+                        </div>
+                        <div class="text-muted" style="font-size:0.68rem;">{{ ri.date_debut[8:10] }}/{{ ri.date_debut[5:7] }} · par {{ ri.nom_org }}</div>
+                        <div class="text-truncate" style="font-size:0.68rem; color:#6b21a8;" title="{{ ri.motif }}">
+                            <i class="bi bi-chat-left-text me-1"></i>{{ ri.motif }}
+                        </div>
+                        <div style="font-size:0.68rem; color:#6b21a8;">
+                            <i class="bi bi-people me-1"></i>{{ ri.nb_personnes or 1 }} personne{{ 's' if (ri.nb_personnes or 1) > 1 }}
+                        </div>
+                        {% if resas_invitee|length > 1 %}
+                        <div class="text-muted" style="font-size:0.66rem;">+{{ resas_invitee|length - 1 }} autre{{ 's' if resas_invitee|length > 2 }}</div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+            </form>
+        </div>
+    </div>
+
+    <div class="col-lg-9">
+        {# ── Macro : carte d'une salle ──────────────────────────────── #}
+        {% macro salle_card(salle) %}
+        {% if salle.status.etat == "LIBRE" %}{% set accent_color = "#22c55e" %}
+        {% elif salle.status.etat == "OCCUPÉ" %}{% set accent_color = "#ef4444" %}
+        {% elif salle.status.etat == "RÉSERVÉ" or salle.status.etat == "PARTIEL" %}{% set accent_color = "#f59e0b" %}
+        {% elif salle.status.etat == "BLOQUÉ" %}{% set accent_color = "#6b7280" %}
+        {% else %}{% set accent_color = "#22c55e" %}{% endif %}
+
+        <div class="col-md-6 col-xl-4 salle-card" data-nom="{{ salle.nom }}"
+             data-places="{{ salle.infos.places_int if salle.infos.places_int is not none else '' }}">
+            <div class="h-100 glass card-hover rounded-4 overflow-hidden position-relative"
+                 style="border: var(--card-border); border-left: 3px solid {{ accent_color }};">
+
+                <a href="/salle/{{ salle.nom }}" class="text-decoration-none text-reset d-flex flex-column h-100 p-3">
+
+                    {# ── En-tête : nom + favori ── #}
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div class="flex-grow-1 min-w-0">
+                            <h5 class="fw-bold mb-1 lh-1">{{ salle.infos.nom_complet }}</h5>
+                            <div class="small text-muted d-flex align-items-center gap-1 flex-wrap">
+                                <i class="bi bi-arrow-right-circle" style="font-size:0.7rem;"></i>
+                                {% if salle.infos.aile_calc == 'gauche' %}Gauche{% else %}Droite{% endif %}
+                                <span class="opacity-50">·</span>
+                                Étage {{ salle.infos.etage_calc }}
+                                {% if salle.infos.places_int %}
+                                    <span class="opacity-50">·</span>
+                                    <i class="bi bi-people-fill"></i> {{ salle.infos.places_int }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        <i class="bi bi-star-fill fav-btn text-muted flex-shrink-0 ms-2"
+                           style="font-size:1rem; z-index:10;"
+                           onclick="toggleFav(event, '{{ salle.nom }}')"></i>
+                    </div>
+
+                    {# ── Équipements + badge site ── #}
+                    <div class="d-flex gap-1 flex-wrap mb-3">
+                        {% if salle.infos.pc %}
+                            <span class="badge rounded-pill bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2" title="PC">
+                                <i class="bi bi-pc-display me-1"></i>PC
+                            </span>
+                        {% endif %}
+                        {% if salle.infos.projecteur %}
+                            <span class="badge rounded-pill bg-info bg-opacity-10 text-info border border-info border-opacity-25 px-2" title="Projecteur">
+                                <i class="bi bi-projector me-1"></i>Projo
+                            </span>
+                        {% endif %}
+                        {% if salle.infos.tableau %}
+                            <span class="badge rounded-pill bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2" title="Tableau">
+                                <i class="bi bi-easel2-fill me-1"></i>Tableau
+                            </span>
+                        {% endif %}
+                        {% if salle.infos.has_issue %}
+                            <span class="badge rounded-pill bg-warning text-dark border border-warning px-2" title="Incident signalé">
+                                <i class="bi bi-exclamation-triangle-fill"></i>
+                            </span>
+                        {% endif %}
+                        {# ── Badge site (affiché uniquement en vue globale multi-sites) ── #}
+                        {% if salle.site and not current_site_id %}
+                            <span class="badge rounded-pill px-2" title="{{ salle.site.nom }} · {{ salle.site.heure_ouverture }}–{{ salle.site.heure_fermeture }} · {{ salle.site.jours_ouverture | fmt_jours }}"
+                                  style="background:{{ salle.site.couleur }}18;color:{{ salle.site.couleur }};border:1px solid {{ salle.site.couleur }}55;">
+                                <i class="bi bi-geo-alt-fill me-1"></i>{{ salle.site.nom | truncate(14, true, '…') }}
+                            </span>
+                        {% endif %}
+                    </div>
+
+                    {# ── Statut ── #}
+                    <div class="mt-auto">
+                        {% if salle.status.etat == "OCCUPÉ" %}
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="small fw-semibold text-danger d-flex align-items-center gap-1">
+                                    <i class="bi bi-circle-fill" style="font-size:0.45rem;"></i>Cours en cours
+                                </span>
+                                <span class="text-muted" style="font-size:0.75rem;">{{ salle.status.sub_msg }}</span>
+                            </div>
+                            <div class="progress" style="height:3px; border-radius:2px; background:rgba(239,68,68,0.15);">
+                                <div class="progress-bar bg-danger" style="width:{{ salle.status.progression }}%; border-radius:2px;"></div>
+                            </div>
+
+                        {% elif salle.status.etat == "RÉSERVÉ" %}
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="small fw-semibold d-flex align-items-center gap-1" style="color:#b45309;">
+                                    <i class="bi bi-circle-fill" style="font-size:0.45rem;"></i>
+                                    {% if salle.status.nb_resas > 1 %}{{ salle.status.nb_resas }} réservations
+                                    {% else %}Réservée · {{ salle.status.resa_nom_org }}{% endif %}
+                                </span>
+                                <span class="text-muted" style="font-size:0.75rem;">{{ salle.status.resa_fin }}</span>
+                            </div>
+                            <div class="progress" style="height:3px; border-radius:2px; background:rgba(245,158,11,0.15);">
+                                <div class="progress-bar" style="width:{{ salle.status.progression }}%; background:#f59e0b; border-radius:2px;"></div>
+                            </div>
+
+                        {% elif salle.status.etat == "PARTIEL" %}
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="small fw-semibold d-flex align-items-center gap-1" style="color:#b45309;">
+                                    <i class="bi bi-people-fill" style="font-size:0.7rem;"></i>
+                                    {{ salle.status.places_restantes }} place{{ 's' if salle.status.places_restantes > 1 }} libre{{ 's' if salle.status.places_restantes > 1 }}
+                                </span>
+                                <span class="text-muted" style="font-size:0.75rem;">{{ salle.status.places_occupees }}/{{ salle.status.places_totales }} · {{ salle.status.nb_resas }} rés.</span>
+                            </div>
+                            <div class="progress" style="height:3px; border-radius:2px; background:rgba(245,158,11,0.15);">
+                                <div class="progress-bar" style="width:{{ ((salle.status.places_occupees / salle.status.places_totales) * 100)|round|int }}%; background:#f59e0b; border-radius:2px;"></div>
+                            </div>
+
+                        {% elif salle.status.etat == "BLOQUÉ" %}
+                            <div class="d-flex align-items-center gap-2 small fw-semibold" style="color:#9ca3af;">
+                                <i class="bi bi-lock-fill"></i>
+                                Bloquée · {{ salle.status.sub_msg }}
+                            </div>
+
+                        {% else %}
+                            <div class="d-flex align-items-center gap-2 small fw-semibold text-success">
+                                <i class="bi bi-circle-fill" style="font-size:0.45rem;"></i>
+                                Libre · {{ salle.status.sub_msg }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                </a>
+            </div>
+        </div>
+        {% endmacro %}
+
+        {# ── Affichage : groupé par site si vue globale, simple sinon ── #}
+        <div id="sallesContainer">
+
+        {% if salles %}
+            {# ── Vue globale (aucun site sélectionné) + plusieurs sites distincts → groupement ── #}
+            {% if not current_site_id and (salles | selectattr('site_id') | list | length > 0) %}
+
+                {# Salles sans site en premier groupe optionnel #}
+                {% set sans_site = salles | selectattr('site_id', 'none') | list %}
+                {# Extraire les sites uniques présents dans la liste (conserve l'ordre) #}
+                {% set ns = namespace(seen=[], groupes=[]) %}
+                {% for salle in salles %}
+                    {% if salle.site_id and salle.site_id not in ns.seen %}
+                        {% set _ = ns.seen.append(salle.site_id) %}
+                    {% endif %}
+                {% endfor %}
+
+                {# Afficher les groupes par site #}
+                {% for site_id_g in ns.seen %}
+                    {% set site_salles = salles | selectattr('site_id', 'equalto', site_id_g) | list %}
+                    {% set site_info_g = site_salles[0].site %}
+                    {# ── En-tête de section site ── #}
+                    <div class="col-12 mt-2 mb-1" style="padding-top:0.25rem;">
+                        <div class="d-flex align-items-center gap-2" style="border-bottom: 2px solid {{ site_info_g.couleur if site_info_g else '#e5e7eb' }}; padding-bottom:6px; margin-bottom:4px;">
+                            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{{ site_info_g.couleur if site_info_g else '#9ca3af' }};flex-shrink:0;"></span>
+                            {% if site_info_g and site_info_g.logo_url %}
+                            <img src="{{ site_info_g.logo_url }}" alt="{{ site_info_g.nom }}" style="width:20px;height:20px;object-fit:contain;">
+                            {% endif %}
+                            <span class="fw-bold" style="font-size:0.85rem;color:{{ site_info_g.couleur if site_info_g else 'var(--bs-secondary)' }};">
+                                {{ site_info_g.nom if site_info_g else 'Site #' ~ site_id_g }}
+                            </span>
+                            {% if site_info_g and site_info_g.adresse %}
+                            <span class="text-muted" style="font-size:0.72rem;">· {{ site_info_g.adresse }}</span>
+                            {% endif %}
+                            <span class="badge rounded-pill ms-1" style="background:{{ site_info_g.couleur if site_info_g else '#9ca3af' }}18;color:{{ site_info_g.couleur if site_info_g else '#9ca3af' }};border:1px solid {{ site_info_g.couleur if site_info_g else '#9ca3af' }}55;font-size:0.68rem;">
+                                {{ site_salles | length }} salle{{ 's' if site_salles | length > 1 }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3 w-100" style="margin:0;">
+                    {% for salle in site_salles %}
+                        {{ salle_card(salle) }}
+                    {% endfor %}
+                    </div>
+                {% endfor %}
+
+                {# Salles sans site (non rattachées) #}
+                {% if sans_site %}
+                <div class="col-12 mt-2 mb-1">
+                    <div class="d-flex align-items-center gap-2" style="border-bottom:2px solid #e5e7eb;padding-bottom:6px;margin-bottom:4px;">
+                        <i class="bi bi-geo-alt text-muted" style="font-size:0.85rem;"></i>
+                        <span class="fw-bold text-muted" style="font-size:0.85rem;">Non rattachées</span>
+                        <span class="badge rounded-pill ms-1 bg-secondary bg-opacity-10 text-secondary" style="font-size:0.68rem;">{{ sans_site | length }}</span>
+                    </div>
+                </div>
+                <div class="row g-3 mb-3 w-100" style="margin:0;">
+                {% for salle in sans_site %}
+                    {{ salle_card(salle) }}
+                {% endfor %}
+                </div>
+                {% endif %}
+
+            {% else %}
+                {# Vue site unique ou toutes salles du même site : affichage simple en grille #}
+                <div class="row g-3">
+                {% for salle in salles %}
+                    {{ salle_card(salle) }}
+                {% endfor %}
+                </div>
+            {% endif %}
+
+        {% else %}
+            <div class="row g-3">
+                <div class="col-12 text-center py-5">
+                    <i class="bi bi-search display-1 text-muted opacity-25"></i>
+                    <p class="mt-3 text-muted">Aucune salle trouvée.</p>
+                </div>
+            </div>
+        {% endif %}
+
+        </div>{# /sallesContainer #}
+    </div>
+</div>
+
+<script>
+    // --- GESTION DES FAVORIS (LOCALSTORAGE) ---
+    function toggleFav(e, nomSalle) {
+        e.preventDefault();
+        e.stopPropagation();
+        let favs = JSON.parse(localStorage.getItem('favoris') || '[]');
+        const index = favs.indexOf(nomSalle);
+        if (index === -1) { favs.push(nomSalle); } else { favs.splice(index, 1); }
+        localStorage.setItem('favoris', JSON.stringify(favs));
+        updateFavIcons();
+        trierSalles();
+    }
+
+    function updateFavIcons() {
+        const favs = JSON.parse(localStorage.getItem('favoris') || '[]');
+        document.querySelectorAll('.salle-card').forEach(card => {
+            const nom = card.dataset.nom;
+            const icon = card.querySelector('.fav-btn');
+            if (favs.includes(nom)) { icon.classList.add('active'); } else { icon.classList.remove('active'); }
+        });
+    }
+
+    function trierSalles() {
+        const favs = JSON.parse(localStorage.getItem('favoris') || '[]');
+        const container = document.getElementById('sallesContainer');
+        const cards = Array.from(container.children);
+        cards.sort((a, b) => {
+            const aFav = favs.includes(a.dataset.nom);
+            const bFav = favs.includes(b.dataset.nom);
+            if (aFav && !bFav) return -1;
+            if (!aFav && bFav) return 1;
+            return 0;
+        });
+        cards.forEach(card => container.appendChild(card));
+    }
+
+    // --- FILTRE CAPACITÉ (côté client) ---
+    let activeCapacity = parseInt('{{ f_cap or 0 }}') || 0;
+
+    function setCapacity(cap) {
+        activeCapacity = cap;
+        document.getElementById('capInput').value = cap > 0 ? cap : '';
+
+        // Mise à jour visuelle des boutons
+        document.querySelectorAll('.cap-btn').forEach(btn => {
+            const btnCap = parseInt(btn.dataset.cap);
+            btn.classList.toggle('btn-secondary', btnCap === cap);
+            btn.classList.toggle('btn-outline-secondary', btnCap !== cap);
+        });
+
+        // Filtrage des cartes
+        applyCapacityFilter();
+
+        // Sauvegarder dans l'URL sans recharger (pour que le reset fonctionne)
+        const url = new URL(window.location);
+        if (cap > 0) {
+            url.searchParams.set('cap', cap);
+        } else {
+            url.searchParams.delete('cap');
+        }
+        history.replaceState(null, '', url);
+    }
+
+    function applyCapacityFilter() {
+        const container = document.getElementById('sallesContainer');
+        let anyVisible = false;
+        document.querySelectorAll('.salle-card').forEach(card => {
+            if (activeCapacity === 0) {
+                card.style.display = '';
+                anyVisible = true;
+                return;
+            }
+            const places = card.dataset.places;
+            // Salles sans capacité renseignée : masquées si un filtre est actif
+            if (places === '' || places === null) {
+                card.style.display = 'none';
+            } else if (parseInt(places) >= activeCapacity) {
+                card.style.display = '';
+                anyVisible = true;
+            } else {
+                card.style.display = 'none';
+            }
+        });
+
+        // Message "aucun résultat" si tout est masqué
+        let emptyMsg = document.getElementById('capEmptyMsg');
+        if (!anyVisible && activeCapacity > 0) {
+            if (!emptyMsg) {
+                emptyMsg = document.createElement('div');
+                emptyMsg.id = 'capEmptyMsg';
+                emptyMsg.className = 'col-12 text-center py-5';
+                emptyMsg.innerHTML = '<i class="bi bi-people display-1 text-muted opacity-25"></i><p class="mt-3 text-muted">Aucune salle avec cette capacité.</p>';
+                container.appendChild(emptyMsg);
+            }
+        } else if (emptyMsg) {
+            emptyMsg.remove();
+        }
+    }
+
+    // Auto-dismiss des toasts Bootstrap après 4 secondes
+    document.addEventListener('DOMContentLoaded', () => {
+        updateFavIcons();
+        trierSalles();
+        applyCapacityFilter();
+        document.querySelectorAll('.toast').forEach(toastEl => {
+            setTimeout(() => {
+                const bsToast = bootstrap.Toast.getOrCreateInstance(toastEl);
+                bsToast.hide();
+            }, 4000);
+        });
+    });
+</script>
+
+{% endblock %}

@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ etablissement.etablissement_nom or 'SalleDispo' }} — Connexion</title>
+
+    {# ── Couleur et nom de l'établissement (paramètres admin) ── #}
+    {% set couleur = etablissement.etablissement_couleur or '#1a56db' %}
+    {% set nom_etab = etablissement.etablissement_nom or 'IUT' %}
+    {% set sous_titre = etablissement.etablissement_sous_titre or 'Réservation de salles' %}
+
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --navy:    #ffffff;
+            --navy-2:  #f0f4ff;
+            --navy-3:  #ffffff;
+            --blue:    {{ couleur }};
+            --blue-lt: {{ couleur }};
+            --accent:  {{ couleur }};
+            --accent-lt: color-mix(in srgb, {{ couleur }} 15%, white);
+            --white:   #0f172a;
+            --muted:   #374151;
+            --glass:   color-mix(in srgb, {{ couleur }} 5%, transparent);
+            --border:  color-mix(in srgb, {{ couleur }} 12%, transparent);
+        }
+
+        html, body {
+            height: 100%;
+            font-family: 'DM Sans', sans-serif;
+            background: var(--navy);
+            color: var(--white);
+            overflow: hidden;
+        }
+
+        /* ── Layout split ── */
+        .page {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* ════════════════════════════
+           CÔTÉ GAUCHE — illustration
+        ════════════════════════════ */
+        .left {
+            flex: 1 1 55%;
+            position: relative;
+            background: var(--navy-2);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 48px;
+        }
+
+        /* Gradient de fond */
+        .left::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 60% 50% at 30% 20%, rgba(26,86,219,0.10) 0%, transparent 70%),
+                radial-gradient(ellipse 40% 40% at 80% 70%, rgba(26,86,219,0.06) 0%, transparent 60%);
+            z-index: 0;
+        }
+
+        /* Grille de points subtile */
+        .left::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: radial-gradient(circle, rgba(26,86,219,0.08) 1px, transparent 1px);
+            background-size: 28px 28px;
+            z-index: 0;
+        }
+
+        /* ── Bâtiment SVG ── */
+        .building-wrap {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1;
+        }
+
+        .building-svg {
+            width: min(420px, 72%);
+            height: auto;
+            filter: drop-shadow(0 40px 80px rgba(0,0,0,0.5));
+            animation: buildingFloat 6s ease-in-out infinite;
+        }
+
+        @keyframes buildingFloat {
+            0%, 100% { transform: translateY(0); }
+            50%       { transform: translateY(-10px); }
+        }
+
+        /* Fenêtres animées */
+        .win { transition: opacity 0.4s ease, fill 0.4s ease; }
+        .win.lit { fill: var(--accent-lt) !important; opacity: 1 !important; }
+
+        /* ── Texte bas gauche ── */
+        .left-text {
+            position: relative;
+            z-index: 2;
+            animation: fadeUp 0.8s ease both;
+            animation-delay: 0.3s;
+        }
+        .left-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 14px;
+        }
+        .left-tag::before {
+            content: '';
+            width: 24px;
+            height: 2px;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+        .left-headline {
+            font-family: 'DM Serif Display', serif;
+            font-size: clamp(2rem, 3.5vw, 3rem);
+            line-height: 1.15;
+            color: var(--white);
+            margin-bottom: 16px;
+        }
+        .left-headline em {
+            font-style: italic;
+            color: #0f172a;
+        }
+        .left-sub {
+            font-size: 0.9rem;
+            color: #374151;
+            line-height: 1.6;
+            max-width: 380px;
+        }
+
+        /* ── Badges stat ── */
+        .stat-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 28px;
+            flex-wrap: wrap;
+        }
+        .stat-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 40px;
+            background: var(--glass);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(8px);
+            font-size: 0.78rem;
+            color: #1e293b;
+            animation: fadeUp 0.8s ease both;
+        }
+        .stat-pill i { color: var(--accent); font-size: 0.85rem; }
+        .stat-pill:nth-child(1) { animation-delay: 0.5s; }
+        .stat-pill:nth-child(2) { animation-delay: 0.65s; }
+        .stat-pill:nth-child(3) { animation-delay: 0.8s; }
+
+        /* ════════════════════════════
+           CÔTÉ DROIT — formulaire
+        ════════════════════════════ */
+        .right {
+            flex: 0 0 420px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 56px 48px;
+            background: var(--navy-3);
+            border-left: 1px solid rgba(26,86,219,0.12);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .right::before {
+            content: '';
+            position: absolute;
+            top: -120px;
+            right: -80px;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(26,86,219,0.07) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .right::after {
+            content: '';
+            position: absolute;
+            bottom: -80px;
+            left: -60px;
+            width: 220px;
+            height: 220px;
+            background: radial-gradient(circle, rgba(26,86,219,0.05) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        /* Logo */
+        .form-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 40px;
+            animation: fadeUp 0.6s ease both;
+        }
+        .form-logo-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: var(--blue);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            color: #fff;
+            box-shadow: 0 0 0 4px rgba(26,86,219,0.2);
+        }
+        .form-logo-text {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.4rem;
+            color: var(--white);
+            letter-spacing: -0.3px;
+        }
+        .form-logo-text span { color: var(--accent); }
+
+        /* Titre */
+        .form-title {
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.85rem;
+            color: var(--white);
+            line-height: 1.2;
+            margin-bottom: 6px;
+            animation: fadeUp 0.6s ease both;
+            animation-delay: 0.1s;
+        }
+        .form-subtitle {
+            font-size: 0.85rem;
+            color: #374151;
+            margin-bottom: 36px;
+            animation: fadeUp 0.6s ease both;
+            animation-delay: 0.15s;
+        }
+
+        /* Erreur */
+        .error-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            border-radius: 10px;
+            background: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.25);
+            color: #fca5a5;
+            font-size: 0.82rem;
+            margin-bottom: 20px;
+            animation: shake 0.4s ease;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%       { transform: translateX(-6px); }
+            40%       { transform: translateX(6px); }
+            60%       { transform: translateX(-4px); }
+            80%       { transform: translateX(4px); }
+        }
+
+        /* Champs */
+        .field-group {
+            margin-bottom: 16px;
+            animation: fadeUp 0.6s ease both;
+        }
+        .field-group:nth-child(1) { animation-delay: 0.2s; }
+        .field-group:nth-child(2) { animation-delay: 0.28s; }
+
+        .field-label {
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: #1e293b;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .field-wrap {
+            position: relative;
+        }
+        .field-wrap i {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #475569;
+            font-size: 0.95rem;
+            pointer-events: none;
+            transition: color 0.2s;
+        }
+        .field-input {
+            width: 100%;
+            padding: 13px 14px 13px 40px;
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--white);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+        }
+        .field-input::placeholder { color: rgba(148,163,184,0.5); }
+        .field-input:focus {
+            border-color: var(--blue-lt);
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+            background: rgba(255,255,255,0.06);
+        }
+        .field-input:focus + i,
+        .field-wrap:focus-within i {
+            color: var(--blue-lt);
+        }
+
+        /* Bouton submit */
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            background: var(--blue);
+            color: #fff;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.92rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 8px;
+            position: relative;
+            overflow: hidden;
+            transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+            box-shadow: 0 4px 20px rgba(26,86,219,0.35);
+            animation: fadeUp 0.6s ease both;
+            animation-delay: 0.35s;
+        }
+        .btn-login::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
+            pointer-events: none;
+        }
+        .btn-login:hover {
+            background: #1e63f0;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 28px rgba(26,86,219,0.5);
+        }
+        .btn-login:active { transform: translateY(0); box-shadow: none; }
+
+        /* Divider note */
+        .form-note {
+            margin-top: 28px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+            font-size: 0.78rem;
+            color: #374151;
+            text-align: center;
+            line-height: 1.6;
+            animation: fadeUp 0.6s ease both;
+            animation-delay: 0.45s;
+        }
+        .form-note i { color: var(--accent); margin-right: 4px; }
+
+        /* ── Animations globales ── */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── Mobile : colonne unique ── */
+        @media (max-width: 768px) {
+            html, body { overflow: auto; }
+            .page { flex-direction: column; height: auto; min-height: 100vh; }
+            .left { flex: 0 0 260px; padding: 32px 28px 28px; }
+            .building-wrap { display: none; }
+            .right { flex: 1; padding: 40px 28px; border-left: none; border-top: 1px solid var(--border); }
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+
+    <!-- ══ GAUCHE ══ -->
+    <div class="left">
+
+        <!-- Bâtiment animé -->
+        <div class="building-wrap">
+            <svg class="building-svg" viewBox="0 0 340 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Ombre portée sol -->
+                <ellipse cx="170" cy="415" rx="120" ry="8" fill="rgba(0,0,0,0.35)"/>
+
+                <!-- Corps du bâtiment principal -->
+                <rect x="40" y="100" width="260" height="310" rx="4" fill="#1e3a5f"/>
+                <rect x="40" y="100" width="260" height="310" rx="4" fill="url(#buildGrad)"/>
+
+                <!-- Façade texturée -->
+                <rect x="40" y="100" width="260" height="310" rx="4" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+
+                <!-- Toit / attique -->
+                <rect x="30" y="88" width="280" height="20" rx="3" fill="#16305a"/>
+                <rect x="30" y="88" width="280" height="20" rx="3" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+
+                <!-- Antenne -->
+                <line x1="170" y1="88" x2="170" y2="50" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+                <circle cx="170" cy="48" r="4" fill="#60a5fa" opacity="0.9"/>
+                <circle cx="170" cy="48" r="8" fill="rgba(96,165,250,0.2)"/>
+
+                <!-- Bande horizontale entre étages -->
+                <rect x="40" y="195" width="260" height="3" fill="rgba(255,255,255,0.04)"/>
+                <rect x="40" y="290" width="260" height="3" fill="rgba(255,255,255,0.04)"/>
+
+                <!-- ── FENÊTRES Étage 3 (haut) : y=115 ── -->
+                <!-- Rangée 1 -->
+                <rect class="win" id="w00" x="60"  y="118" width="32" height="44" rx="3" fill="rgba(255,255,255,0.08)" opacity="0.6"/>
+                <rect class="win" id="w01" x="104" y="118" width="32" height="44" rx="3" fill="rgba(255,255,255,0.08)" opacity="0.6"/>
+                <rect class="win" id="w02" x="148" y="118" width="44" height="44" rx="3" fill="rgba(255,255,255,0.08)" opacity="0.6"/>
+                <rect class="win" id="w03" x="204" y="118" width="32" height="44" rx="3" fill="rgba(255,255,255,0.08)" opacity="0.6"/>
+                <rect class="win" id="w04" x="248" y="118" width="32" height="44" rx="3" fill="rgba(255,255,255,0.08)" opacity="0.6"/>
+
+                <!-- ── FENÊTRES Étage 2 : y=210 ── -->
+                <rect class="win" id="w10" x="60"  y="210" width="32" height="44" rx="3" fill="rgba(255,255,255,0.08)" opacity="0.6"/>
+                <rect class="win" id="w11" x="104" y="210" width="32" height="44" rx="3" fill="rgba(255,255,255,0.08)" opacity="0.6"/>
+                <rect class="win" id="w12" x="148" y="210" width="44" height="44" rx="3" fill="rgba(255,255,255,0.08)" opacity="0.6"/>
+                <rect class="win" id="w13" x="204" y="210" width="32" height="44" rx="3" fill="rgba(255,255,255,0.08)" opacity="0.6"/>
+                <rect class="win" id="w14" x="248" y="210" width="32" height="44" rx="3" fill="rgba(255,255,255,0.08)" opacity="0.6"/>
+
+                <!-- ── FENÊTRES Étage 1 : y=302 ── -->
+                <rect class="win" id="w20" x="60"  y="302" width="32" height="44" rx="3" fill="rgba(255,255,255,0.08)" opacity="0.6"/>
+                <rect class="win" id="w21" x="104" y="302" width="32" height="44" rx="3" fill="rgba(255,255,255,0.08)" opacity="0.6"/>
+                <rect class="win" id="w22" x="148" y="302" width="44" height="44" rx="3" fill="rgba(255,255,255,0.08)" opacity="0.6"/>
+                <rect class="win" id="w23" x="204" y="302" width="32" height="44" rx="3" fill="rgba(255,255,255,0.08)" opacity="0.6"/>
+                <rect class="win" id="w24" x="248" y="302" width="32" height="44" rx="3" fill="rgba(255,255,255,0.08)" opacity="0.6"/>
+
+                <!-- Entrée -->
+                <rect x="135" y="354" width="70" height="56" rx="4 4 0 0" fill="#0f2040"/>
+                <rect x="135" y="354" width="70" height="56" rx="4 4 0 0" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+                <!-- Poignée de porte -->
+                <circle cx="196" cy="382" r="3" fill="rgba(96,165,250,0.6)"/>
+
+                <!-- Marches -->
+                <rect x="120" y="405" width="100" height="5" rx="2" fill="#16305a"/>
+                <rect x="110" y="408" width="120" height="4" rx="2" fill="#1e3a5f"/>
+
+                <!-- Reflet vitres sur le côté -->
+                <rect x="40" y="100" width="8" height="310" rx="2" fill="url(#sideGrad)" opacity="0.3"/>
+
+                <!-- Dégradés -->
+                <defs>
+                    <linearGradient id="buildGrad" x1="40" y1="100" x2="300" y2="410" gradientUnits="userSpaceOnUse">
+                        <stop offset="0%" stop-color="#1e3a5f"/>
+                        <stop offset="100%" stop-color="#0f2040"/>
+                    </linearGradient>
+                    <linearGradient id="sideGrad" x1="0" y1="0" x2="1" y2="0" gradientUnits="objectBoundingBox">
+                        <stop offset="0%" stop-color="white" stop-opacity="0.15"/>
+                        <stop offset="100%" stop-color="white" stop-opacity="0"/>
+                    </linearGradient>
+                </defs>
+            </svg>
+        </div>
+
+        <!-- Texte bas -->
+        <div class="left-text">
+            <div class="left-tag d-flex align-items-center gap-2">
+                {% set logo_file = etablissement.etablissement_logo or '' %}
+                {% if logo_file %}
+                    <img src="/static/uploads/logo/{{ logo_file }}"
+                         alt="Logo" style="height:18px;width:auto;object-fit:contain;opacity:0.85;">
+                {% endif %}
+                {{ nom_etab }}
+            </div>
+            <h1 class="left-headline">
+                Vos salles,<br><em>en temps réel.</em>
+            </h1>
+            <p class="left-sub">
+                {{ sous_titre }}
+            </p>
+            <div class="stat-row">
+                <div class="stat-pill"><i class="bi bi-building"></i> Salles connectées</div>
+                <div class="stat-pill"><i class="bi bi-calendar-check"></i> Réservations en ligne</div>
+                <div class="stat-pill"><i class="bi bi-display"></i> Affichage TV live</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ DROITE ══ -->
+    <div class="right">
+
+        <!-- Logo -->
+        <div class="form-logo">
+            {% set logo_file = etablissement.etablissement_logo or '' %}
+            {% if logo_file %}
+                <img src="/static/uploads/logo/{{ logo_file }}"
+                     alt="Logo {{ nom_etab }}"
+                     style="height:40px; width:auto; object-fit:contain; border-radius:8px;">
+            {% else %}
+                <div class="form-logo-icon"><i class="bi bi-grid-fill"></i></div>
+            {% endif %}
+            <div class="form-logo-text">{{ nom_etab }}</div>
+        </div>
+
+        <h2 class="form-title">Bon retour</h2>
+        <p class="form-subtitle">Connectez-vous pour accéder aux salles.</p>
+
+        {% if error %}
+        <div class="error-box">
+            <i class="bi bi-exclamation-circle-fill"></i>
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="POST" action="/login" autocomplete="on">
+
+            <div class="field-group">
+                <label class="field-label" for="username">Identifiant</label>
+                <div class="field-wrap">
+                    <input class="field-input" type="text" id="username" name="username"
+                           placeholder="votre.identifiant" autocomplete="username" required>
+                    <i class="bi bi-person"></i>
+                </div>
+            </div>
+
+            <div class="field-group">
+                <label class="field-label" for="password">Mot de passe</label>
+                <div class="field-wrap">
+                    <input class="field-input" type="password" id="password" name="password"
+                           placeholder="••••••••" autocomplete="current-password" required>
+                    <i class="bi bi-key"></i>
+                </div>
+                <div style="text-align:right; margin-top:6px;">
+                    <a href="/mot-de-passe-oublie"
+                       style="font-size:0.75rem; color:#1a56db; text-decoration:none; font-weight:500;
+                              transition:opacity 0.2s;"
+                       onmouseover="this.style.opacity='.7'"
+                       onmouseout="this.style.opacity='1'">
+                        Mot de passe oublié ?
+                    </a>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-login">
+                Se connecter <i class="bi bi-arrow-right ms-1"></i>
+            </button>
+        </form>
+
+        <div class="form-note">
+            <i class="bi bi-shield-lock-fill"></i>
+            Accès réservé aux étudiants et au personnel.<br>
+            Connexion sécurisée depuis le réseau IUT.
+        </div>
+    </div>
+</div>
+
+<script>
+    // ── Fenêtres qui s'allument aléatoirement ──
+    const windows = Array.from(document.querySelectorAll('.win'));
+    const TOTAL = windows.length;
+
+    // Allumer quelques fenêtres au chargement
+    function initLit() {
+        const count = Math.floor(TOTAL * 0.45);
+        const shuffled = [...windows].sort(() => Math.random() - 0.5);
+        shuffled.slice(0, count).forEach((w, i) => {
+            setTimeout(() => w.classList.add('lit'), i * 80);
+        });
+    }
+
+    // Toggler aléatoire en continu
+    function randomToggle() {
+        const w = windows[Math.floor(Math.random() * TOTAL)];
+        w.classList.toggle('lit');
+        // Prochaine itération dans 600ms–2.5s
+        setTimeout(randomToggle, 600 + Math.random() * 1900);
+    }
+
+    // Init après un court délai
+    setTimeout(() => {
+        initLit();
+        setTimeout(randomToggle, 1200);
+    }, 400);
+</script>
+</body>
+</html>

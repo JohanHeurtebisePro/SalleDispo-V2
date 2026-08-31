@@ -155,4 +155,4 @@ Ce dépôt est publié à titre de **démonstration et de portfolio** : il montr
 
 ## 👤 Auteur
 
-Développé par [Votre nom] — [lien vers votre profil / portfolio / LinkedIn]
+Développé par Heurtebise Johan — https://heurtebisej-pro.com

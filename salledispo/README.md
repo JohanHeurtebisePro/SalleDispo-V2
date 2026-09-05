@@ -165,7 +165,8 @@ Les 17 tables de la base couvrent quatre grands domaines :
 ### 1. Cloner et installer les dépendances
 
 ```bash
-git clone https://github.com/<votre-utilisateur>/salledispo.git
+git clone https://github.com/JohanHeurtebisePro/SalleDispo-V2.git
+cd SalleDispo-V2
 cd salledispo
 python -m venv venv
 source venv/bin/activate # Windows : venv\Scripts\activate
@@ -175,8 +176,8 @@ pip install -r requirements.txt
 ### 2. Configurer les variables d'environnement
 
 ```bash
-cp .env.mail.example mail.env
-cp .env.secrets.example secrets.env
+cp mail.example.env mail.env
+cp secrets.example.env secrets.env
 ```
 
 Puis éditer ces deux fichiers (ignorés par Git, jamais commités) :

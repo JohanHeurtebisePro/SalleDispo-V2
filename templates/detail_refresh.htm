@@ -1,0 +1,52 @@
+<!-- Fragment à intégrer dans detail.html -->
+<!-- Ajouter ce bouton + script juste après le bloc "etat.msg" dans la colonne gauche -->
+
+<!-- BOUTON REFRESH AJAX (à placer dans la carte de statut) -->
+<div class="text-center mt-3">
+    <button onclick="refreshStatus('{{ nom }}')"
+            class="btn btn-sm btn-outline-secondary rounded-pill px-4"
+            id="refreshBtn" style="font-size:0.78rem;">
+        <i class="bi bi-arrow-clockwise" id="refreshIcon"></i> Actualiser
+    </button>
+    <div class="text-muted mt-1" style="font-size:0.68rem;" id="refreshTime"></div>
+</div>
+
+<!-- SCRIPT AJAX (à ajouter avant </script> de fin dans detail.html) -->
+<script>
+async function refreshStatus(nomFichier) {
+    const btn = document.getElementById('refreshBtn');
+    const icon = document.getElementById('refreshIcon');
+    const timeLabel = document.getElementById('refreshTime');
+    btn.disabled = true;
+    icon.classList.add('spin');
+
+    try {
+        const res = await fetch(`/api/status/${nomFichier}.ics`);
+        if (!res.ok) throw new Error('Erreur réseau');
+        const data = await res.json();
+
+        // Met à jour le badge état
+        const badge = document.getElementById('statusBadge');
+        if (badge) {
+            badge.textContent = data.etat;
+            badge.style.backgroundColor = data.etat === 'LIBRE' ? 'var(--bs-success)' : 'var(--bs-danger)';
+        }
+        const msgEl = document.getElementById('statusMsg');
+        if (msgEl) msgEl.textContent = data.msg;
+        const subEl = document.getElementById('statusSubMsg');
+        if (subEl) subEl.textContent = data.sub_msg;
+
+        const now = new Date();
+        timeLabel.textContent = `Mis à jour à ${now.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'})}`;
+    } catch(e) {
+        timeLabel.textContent = 'Erreur de mise à jour';
+    } finally {
+        btn.disabled = false;
+        icon.classList.remove('spin');
+    }
+}
+</script>
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 0.6s linear infinite; display: inline-block; }
+</style>

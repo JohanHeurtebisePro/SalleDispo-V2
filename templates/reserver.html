@@ -1,0 +1,889 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* ── BARRE DE DATES (même style que detail.html) ── */
+    .date-scroller { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 10px; scrollbar-width: none; -ms-overflow-style: none; }
+    .date-scroller::-webkit-scrollbar { display: none; }
+    .date-btn { min-width: 75px; text-align: center; padding: 12px 5px; border-radius: 16px; background: white; border: 1px solid #e0e0e0; cursor: pointer; transition: 0.2s; flex-shrink: 0; }
+    .date-btn:hover { background: #f1f3f5; transform: translateY(-2px); }
+    .date-btn.active { background: #0d6efd; color: white; border-color: #0d6efd; box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3); }
+    .date-btn .jour-nom { font-size: 0.75rem; text-transform: uppercase; font-weight: 700; }
+    .date-btn .jour-num { font-size: 1.3rem; font-weight: 700; line-height: 1.2; }
+    .date-btn-ferme { background: #f8fafc; color: #adb5bd; }
+    .date-btn-ferme:hover { background: #f1f3f5; }
+    .date-btn-ferme.active { background: #6c757d; color: white; border-color: #6c757d; box-shadow: none; }
+
+    /* ── GRILLE CRÉNEAUX ── */
+    .creneaux-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    .creneau-btn {
+        min-width: 72px; padding: 10px 6px; border-radius: 12px;
+        font-size: 0.8rem; font-weight: 700; text-align: center;
+        border: 2px solid transparent; cursor: pointer; transition: 0.15s;
+        line-height: 1.2;
+    }
+    .creneau-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .creneau-libre   { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+    .creneau-libre:hover { background: #dcfce7; }
+    .creneau-libre.selected { background: #6f42c1; color: white; border-color: #6f42c1; box-shadow: 0 4px 14px rgba(111,66,193,0.4); }
+    .creneau-libre.fin-selected { background: #a78bfa; color: white; border-color: #7c3aed; box-shadow: 0 4px 14px rgba(111,66,193,0.3); }
+    .creneau-libre.range-selected { background: #e9d5ff; color: #6f42c1; border-color: #c4b5fd; }
+    .creneau-cours   { background: #fef2f2; color: #991b1b; border-color: #fecaca; cursor: not-allowed; opacity: 0.7; }
+    .creneau-reserve { background: #fffbeb; color: #92400e; border-color: #fde68a; cursor: not-allowed; opacity: 0.7; }
+    .creneau-bloque  { background: #f1f5f9; color: #64748b; border-color: #cbd5e1; cursor: not-allowed; opacity: 0.7; }
+    .creneau-insuffisant { background: #fff7ed; color: #9a3412; border-color: #fed7aa; cursor: not-allowed; opacity: 0.75; }
+
+    /* ── RÉSUMÉ SÉLECTION ── */
+    #resumeSelection {
+        background: linear-gradient(135deg, #f5f3ff, #ede9fe);
+        border: 2px solid #c4b5fd;
+        border-radius: 16px;
+        padding: 16px 20px;
+        display: none;
+    }
+    #resumeSelection .heure-display { font-size: 1.6rem; font-weight: 900; color: #6f42c1; }
+
+    /* ── PARTICIPANTS ── */
+    #rechercheResultats {
+        position: absolute;
+        z-index: 500;
+        width: 100%;
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        max-height: 260px;
+        overflow-y: auto;
+        top: calc(100% + 4px);
+        left: 0;
+    }
+    [data-bs-theme="dark"] #rechercheResultats {
+        background: #1e293b;
+        border-color: #334155;
+    }
+    .result-item {
+        padding: 10px 14px;
+        cursor: pointer;
+        border-bottom: 1px solid #f1f5f9;
+        transition: background 0.15s;
+    }
+    .result-item:last-child { border-bottom: none; }
+    .result-item:hover { background: #f8faff; }
+    [data-bs-theme="dark"] .result-item:hover { background: #273549; }
+    .result-item .nom { font-weight: 700; font-size: 0.9rem; }
+    .result-item .meta { font-size: 0.75rem; color: #64748b; }
+
+    .participant-badge {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #f0f4ff;
+        border: 1px solid #c7d2fe;
+        border-radius: 50px;
+        padding: 6px 12px 6px 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #3730a3;
+    }
+    [data-bs-theme="dark"] .participant-badge {
+        background: #1e1b4b;
+        border-color: #3730a3;
+        color: #a5b4fc;
+    }
+    .participant-badge .avatar {
+        width: 28px; height: 28px;
+        border-radius: 50%;
+        background: #6366f1;
+        color: white;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.7rem;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+    .participant-badge .remove-btn {
+        background: none; border: none;
+        color: #6b7280; cursor: pointer;
+        padding: 0; line-height: 1;
+        font-size: 1rem;
+        transition: color 0.15s;
+    }
+    .participant-badge .remove-btn:hover { color: #dc2626; }
+
+    /* ── JAUGE CAPACITÉ ── */
+    .capacity-bar-wrap { background: #e9ecef; border-radius: 50px; height: 10px; overflow: hidden; }
+    .capacity-bar-fill { height: 100%; border-radius: 50px; transition: width 0.4s ease; }
+
+    /* ── COMPTEUR PERSONNES ── */
+    .nb-counter { display: flex; align-items: center; gap: 12px; }
+    .nb-counter button {
+        width: 38px; height: 38px; border-radius: 50%; border: 2px solid #dee2e6;
+        background: white; font-size: 1.2rem; font-weight: 700; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        transition: 0.15s; color: #495057;
+    }
+    .nb-counter button:hover:not(:disabled) { border-color: #0d6efd; color: #0d6efd; }
+    .nb-counter button:disabled { opacity: 0.35; cursor: not-allowed; }
+    .nb-counter .nb-display {
+        font-size: 1.6rem; font-weight: 900; min-width: 44px;
+        text-align: center; color: #0d6efd;
+    }
+    .search-wrapper { position: relative; }
+</style>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 2000;">
+      {% for category, message in messages %}
+        <div class="toast align-items-center text-white bg-{{ 'success' if category == 'success' else ('danger' if category == 'danger' else 'warning') }} border-0 show mb-2" role="alert" aria-live="assertive" aria-atomic="true">
+          <div class="d-flex">
+            <div class="toast-body fw-semibold">{{ message }}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<div class="row justify-content-center mt-3">
+    <div class="col-lg-8 col-xl-7">
+
+        <a href="/salle/{{ nom_salle }}" class="btn btn-outline-secondary mb-3 rounded-pill px-4">
+            <i class="bi bi-arrow-left"></i> Retour
+        </a>
+
+        {# ── HEADER SALLE ── #}
+        <div class="card border-0 shadow-sm p-4 mb-3" style="border-radius: 20px;
+             {% if site_salle %}border-left: 4px solid {{ site_salle.couleur }} !important;{% endif %}">
+            <div class="d-flex flex-row align-items-center gap-3">
+                <div class="p-3 rounded-circle flex-shrink-0"
+                     style="background:{% if site_salle %}{{ site_salle.couleur }}18{% else %}rgba(13,110,253,0.1){% endif %};">
+                    <i class="bi bi-calendar-plus" style="font-size: 1.8rem; color:{% if site_salle %}{{ site_salle.couleur }}{% else %}var(--bs-primary){% endif %};"></i>
+                </div>
+                <div class="flex-grow-1 min-w-0">
+                    <h3 class="fw-bold mb-1">{{ infos.nom_complet }}</h3>
+                    <div class="d-flex gap-2 flex-wrap align-items-center">
+                        {% if infos.pc %}
+                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25"><i class="bi bi-pc-display me-1"></i>PC</span>
+                        {% endif %}
+                        {% if infos.projecteur %}
+                            <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25"><i class="bi bi-projector me-1"></i>Projecteur</span>
+                        {% endif %}
+                        <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">
+                            <i class="bi bi-people me-1"></i>{{ infos.places }} places
+                        </span>
+                        {# ── Badge horaires d'ouverture du site ── #}
+                        <span class="badge bg-dark bg-opacity-10 text-dark border border-dark border-opacity-25" title="Horaires d'ouverture du site">
+                            <i class="bi bi-clock-history me-1"></i>{{ horaires_salle.heure_ouverture }} – {{ horaires_salle.heure_fermeture }}
+                        </span>
+                        {# ── Badge jours d'ouverture du site ── #}
+                        <span class="badge bg-dark bg-opacity-10 text-dark border border-dark border-opacity-25" title="Jours d'ouverture du site">
+                            <i class="bi bi-calendar-week me-1"></i>{{ horaires_salle.jours_ouverture | fmt_jours(abbr=true) }}
+                        </span>
+                        {# ── Badge site de la salle ── #}
+                        {% if site_salle %}
+                        <span class="badge" style="background:{{ site_salle.couleur }}18;color:{{ site_salle.couleur }};border:1px solid {{ site_salle.couleur }}55;">
+                            {% if site_salle.logo_url %}
+                            <img src="{{ site_salle.logo_url }}" alt="" style="width:12px;height:12px;object-fit:contain;margin-right:3px;vertical-align:middle;">
+                            {% else %}
+                            <i class="bi bi-geo-alt-fill me-1"></i>
+                            {% endif %}
+                            {{ site_salle.nom }}
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# ── AVERTISSEMENT INDICATIF ── #}
+        <div class="alert alert-warning border-0 rounded-4 py-3 px-4 mb-3 d-flex align-items-start gap-3" style="background: rgba(255, 193, 7, 0.1); border-left: 4px solid #ffc107 !important; border-radius: 16px !important;">
+            <i class="bi bi-exclamation-triangle-fill text-warning mt-1 flex-shrink-0"></i>
+            <div class="small">
+                <strong class="d-block mb-1">Réservation à titre indicatif</strong>
+                Cette réservation n'a pas de caractère officiel. Elle permet d'informer les autres utilisateurs de votre intention d'utiliser la salle, mais <strong>ne vous garantit pas l'exclusivité</strong> de celle-ci. D'autres personnes peuvent être présentes ou réserver le même créneau si la capacité le permet.
+            </div>
+        </div>
+
+        {# ── FORMULAIRE ── #}
+        <form method="POST" action="/reserver/{{ nom_salle }}" id="formReservation">
+            <input type="hidden" name="heure_debut" id="inputHeureDebut">
+            <input type="hidden" name="heure_fin"   id="inputHeureFin">
+            <input type="hidden" name="date"         id="inputDate" value="{{ date_defaut }}">
+            <input type="hidden" name="nb_personnes" id="inputNbPersonnes" value="1">
+            {# Les participants seront ajoutés dynamiquement comme champs hidden #}
+            <div id="participantsHiddenFields"></div>
+
+            {# ÉTAPE 1 : DATE #}
+            <div class="card border-0 shadow-sm p-4 mb-3" style="border-radius: 20px;">
+                <h5 class="fw-bold mb-3">
+                    <span class="badge bg-primary rounded-circle me-2" style="width:28px;height:28px;line-height:1.5;">1</span>
+                    Choisir une date
+                </h5>
+                <div class="date-scroller" id="dateScroller"></div>
+            </div>
+
+            {# ÉTAPE 2 : CRÉNEAUX #}
+            <div class="card border-0 shadow-sm p-4 mb-3" style="border-radius: 20px;">
+                <h5 class="fw-bold mb-1">
+                    <span class="badge bg-primary rounded-circle me-2" style="width:28px;height:28px;line-height:1.5;">2</span>
+                    Sélectionner un créneau
+                </h5>
+                <p class="text-muted small mb-3">Cliquez sur le créneau de début, puis sur le créneau de fin souhaité.</p>
+
+                <div class="d-flex gap-3 flex-wrap mb-3" style="font-size: 0.78rem;">
+                    <span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#dcfce7;border:1px solid #bbf7d0;"></span> Libre</span>
+                    <span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#6f42c1;"></span> Début sélectionné</span>
+                    <span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#a78bfa;"></span> Fin sélectionnée</span>
+                    <span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#fef2f2;border:1px solid #fecaca;"></span> Cours</span>
+                    <span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#fffbeb;border:1px solid #fde68a;"></span> Réservé</span>
+                    <span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#f1f5f9;border:1px solid #cbd5e1;"></span> Bloqué</span>
+                </div>
+
+                <div id="grilleCréneaux" class="creneaux-grid">
+                    <div class="text-muted small text-center w-100 py-3">
+                        <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                        Chargement des créneaux…
+                    </div>
+                </div>
+
+                <div id="alertePartiel" class="alert alert-warning rounded-3 border-0 py-2 px-3 small mt-2" style="display:none;">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                    <span id="alertePartielMsg"></span>
+                </div>
+
+                <div id="resumeSelection" class="mt-3">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                        <div>
+                            <div class="text-muted small fw-bold mb-1">CRÉNEAU SÉLECTIONNÉ</div>
+                            <div class="heure-display">
+                                <span id="displayDebut">--:--</span>
+                                <span class="text-muted mx-2" style="font-size:1.2rem;">→</span>
+                                <span id="displayFin">--:--</span>
+                            </div>
+                            <div class="text-muted small" id="displayDuree"></div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill" onclick="resetSelection()">
+                            <i class="bi bi-x"></i> Effacer
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {# ÉTAPE 3 : NOMBRE DE PERSONNES #}
+            <div class="card border-0 shadow-sm p-4 mb-3" style="border-radius: 20px;" id="cardNbPersonnes">
+                <h5 class="fw-bold mb-1">
+                    <span class="badge bg-primary rounded-circle me-2" style="width:28px;height:28px;line-height:1.5;">3</span>
+                    Nombre de personnes
+                </h5>
+                {% if infos.places_int %}
+                <p class="text-muted small mb-3">
+                    Cette salle a une capacité de <strong>{{ infos.places_int }} places</strong>.
+                    Indiquez combien vous serez (vous + votre groupe), ou ajoutez les participants nommés ci-dessous.
+                </p>
+                {% else %}
+                <p class="text-muted small mb-3">Indiquez combien vous serez (vous + votre groupe).</p>
+                {% endif %}
+
+                <div class="d-flex align-items-center gap-4 flex-wrap">
+                    <div class="nb-counter">
+                        <button type="button" id="btnMoins" onclick="changerNb(-1)" disabled>−</button>
+                        <div class="nb-display" id="nbDisplay">1</div>
+                        <button type="button" id="btnPlus" onclick="changerNb(1)">+</button>
+                    </div>
+                    <div class="flex-grow-1">
+                        {% if infos.places_int %}
+                        <div class="d-flex justify-content-between small text-muted mb-1">
+                            <span id="capaciteLabel">1 / {{ infos.places_int }} places demandées</span>
+                            <span id="restantLabel" class="fw-semibold text-success">{{ infos.places_int - 1 }} restantes</span>
+                        </div>
+                        <div class="capacity-bar-wrap">
+                            <div class="capacity-bar-fill bg-success" id="capaciteBar" style="width: {{ (1/infos.places_int*100)|round|int }}%;"></div>
+                        </div>
+                        {% endif %}
+                        <div class="text-muted small mt-2" id="nbAutoMsg" style="display:none;">
+                            <i class="bi bi-info-circle me-1 text-info"></i>
+                            Calculé automatiquement d'après les participants ajoutés.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ÉTAPE 4 : MOTIF #}
+            <div class="card border-0 shadow-sm p-4 mb-3" style="border-radius: 20px;">
+                <h5 class="fw-bold mb-3">
+                    <span class="badge bg-primary rounded-circle me-2" style="width:28px;height:28px;line-height:1.5;">4</span>
+                    Motif de réservation
+                </h5>
+                <input type="text"
+                       class="form-control rounded-3"
+                       name="motif"
+                       placeholder="Ex : Projet tutoré, révisions, réunion groupe…"
+                       maxlength="200"
+                       required>
+                <div class="form-text">Maximum 200 caractères.</div>
+            </div>
+
+            {# ÉTAPE 5 : PARTICIPANTS #}
+            <div class="card border-0 shadow-sm p-4 mb-3" style="border-radius: 20px;">
+                <h5 class="fw-bold mb-1">
+                    <span class="badge bg-secondary rounded-circle me-2" style="width:28px;height:28px;line-height:1.5;">5</span>
+                    Ajouter des participants nommés
+                    <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 ms-2 fw-normal" style="font-size:0.7rem;">Optionnel</span>
+                </h5>
+                <p class="text-muted small mb-3">
+                    Recherchez des étudiants par nom, prénom ou numéro étudiant.
+                    <strong>Si vous ajoutez des participants, le nombre de personnes sera mis à jour automatiquement.</strong>
+                </p>
+
+                {# Barre de recherche #}
+                <div class="search-wrapper mb-3">
+                    <div class="input-group">
+                        <span class="input-group-text bg-transparent border-end-0"><i class="bi bi-search text-muted"></i></span>
+                        <input type="text"
+                               class="form-control border-start-0 rounded-end-3"
+                               id="rechercheInput"
+                               placeholder="Nom, prénom ou N° étudiant…"
+                               autocomplete="off">
+                        <span class="input-group-text bg-transparent" id="searchSpinner" style="display:none;">
+                            <div class="spinner-border spinner-border-sm text-muted" role="status"></div>
+                        </span>
+                    </div>
+                    <div id="rechercheResultats" style="display:none;"></div>
+                </div>
+
+                {# Liste des participants ajoutés #}
+                <div id="participantsList" class="d-flex flex-wrap gap-2">
+                    <div id="noParticipantsMsg" class="text-muted small fst-italic">
+                        <i class="bi bi-people me-1"></i>Aucun participant ajouté — vous serez le seul réservant.
+                    </div>
+                </div>
+
+                {# Compteur #}
+                <div class="text-muted small mt-2" id="participantsCount" style="display:none;">
+                    <i class="bi bi-person-check text-success me-1"></i>
+                    <span id="participantsCountText"></span>
+                </div>
+            </div>
+
+            {# BOUTON VALIDER #}
+            <div class="d-grid mb-4">
+                <button type="submit" class="btn btn-success btn-lg rounded-pill fw-bold py-3 shadow-sm" id="btnValider" disabled>
+                    <i class="bi bi-calendar-check me-2"></i>Confirmer la réservation
+                </button>
+                <div class="text-center text-muted small mt-2" id="msgBtnDisabled">
+                    Sélectionnez un créneau pour continuer
+                </div>
+            </div>
+        </form>
+
+        {# ── RÈGLES ── #}
+        <div class="card border-0 shadow-sm p-4 mb-4" style="border-radius: 20px;">
+            <h6 class="fw-bold mb-3"><i class="bi bi-info-circle me-2 text-info"></i>Règles de réservation</h6>
+            <div class="row g-2 small text-muted">
+                <div class="col-6"><i class="bi bi-check2-circle text-success me-1"></i>Durée min : 30 min</div>
+                <div class="col-6"><i class="bi bi-check2-circle text-success me-1"></i>Durée max : 8 heures</div>
+                <div class="col-6"><i class="bi bi-check2-circle text-success me-1"></i>Jusqu'à 30 jours à l'avance</div>
+                <div class="col-6"><i class="bi bi-check2-circle text-success me-1"></i>Horaires : 8h00 – 20h00</div>
+                <div class="col-12"><i class="bi bi-people-fill text-primary me-1"></i>Plusieurs groupes peuvent réserver simultanément si la capacité le permet</div>
+                <div class="col-12 mt-1"><i class="bi bi-exclamation-triangle text-warning me-1"></i>Les réservations sont <strong>indicatives</strong> et ne garantissent pas l'exclusivité de la salle</div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    const NOM_SALLE    = "{{ nom_salle }}";
+    const MOI          = "{{ current_user.id }}";
+    const PLACES_MAX   = {{ infos.places_int or 'null' }};
+    const JOURS_OUVERTURE = {{ horaires_salle.jours_ouverture | tojson }};  // [0..6], 0=Lundi
+
+    let dateSelectionnee = "{{ date_defaut }}";
+    let creneauxData = [];
+    let jourOuvert = true;
+    let motifFermeture = null;
+    let selDebut = null;
+    let selFin   = null;
+    let nbPersonnes = 1;   // nb de personnes total (organisateur inclus)
+    let nbAutoFromParticipants = false;  // true si calculé depuis la liste participants
+
+    // Places réellement disponibles sur le créneau sélectionné.
+    // null = pas de créneau sélectionné ou capacité inconnue → on retombe sur PLACES_MAX.
+    let placesDisponibles = null;
+
+    // Plafond effectif : places restantes sur le créneau si connu, sinon capacité totale.
+    function getPlafond() {
+        if (placesDisponibles !== null) return placesDisponibles;
+        return PLACES_MAX;
+    }
+
+    // ── COMPTEUR PERSONNES ────────────────────────────────────────────────────
+    function changerNb(delta) {
+        if (nbAutoFromParticipants) return;
+        const newVal = nbPersonnes + delta;
+        const max = getPlafond() || 999;
+        if (newVal < 1 || newVal > max) return;
+        nbPersonnes = newVal;
+        syncNbUI();
+        rechargerCreneaux();
+    }
+
+    function syncNbUI(fromParticipants = false) {
+        document.getElementById('nbDisplay').textContent   = nbPersonnes;
+        document.getElementById('inputNbPersonnes').value  = nbPersonnes;
+        const plafond = getPlafond();
+        document.getElementById('btnMoins').disabled = nbPersonnes <= 1 || nbAutoFromParticipants;
+        document.getElementById('btnPlus').disabled  = (plafond && nbPersonnes >= plafond) || nbAutoFromParticipants;
+
+        const autoMsg = document.getElementById('nbAutoMsg');
+        autoMsg.style.display = nbAutoFromParticipants ? '' : 'none';
+
+        if (PLACES_MAX) {
+            // La barre se base sur les places réellement dispo (si un créneau est sélectionné)
+            // sinon sur la capacité totale.
+            const reference = plafond || PLACES_MAX;
+            const pct     = Math.min(100, Math.round(nbPersonnes / reference * 100));
+            const restant = reference - nbPersonnes;
+            const bar = document.getElementById('capaciteBar');
+            bar.style.width = pct + '%';
+            bar.className   = 'capacity-bar-fill ' + (pct >= 90 ? 'bg-danger' : pct >= 60 ? 'bg-warning' : 'bg-success');
+
+            // Label : indique les places déjà prises si le créneau est partiellement réservé
+            if (placesDisponibles !== null && placesDisponibles < PLACES_MAX) {
+                const dejaOccupees = PLACES_MAX - placesDisponibles;
+                document.getElementById('capaciteLabel').textContent =
+                    `${nbPersonnes} / ${placesDisponibles} places disponibles (${dejaOccupees} déjà réservée${dejaOccupees > 1 ? 's' : ''})`;
+            } else {
+                document.getElementById('capaciteLabel').textContent =
+                    `${nbPersonnes} / ${PLACES_MAX} places demandées`;
+            }
+
+            document.getElementById('restantLabel').textContent   = `${restant >= 0 ? restant : 0} restante${restant > 1 ? 's' : ''}`;
+            const rl = document.getElementById('restantLabel');
+            rl.className = 'fw-semibold ' + (restant <= 2 ? 'text-danger' : restant <= 5 ? 'text-warning' : 'text-success');
+        }
+
+        // Alerte partiel : affichée dès qu'un créneau partiellement réservé est sélectionné
+        const alerteEl  = document.getElementById('alertePartiel');
+        const alerteMsg = document.getElementById('alertePartielMsg');
+        if (alerteEl && placesDisponibles !== null && PLACES_MAX && placesDisponibles < PLACES_MAX) {
+            const dejaOccupees = PLACES_MAX - placesDisponibles;
+            alerteMsg.textContent = `Ce créneau est partiellement réservé : ${dejaOccupees} place${dejaOccupees > 1 ? 's' : ''} déjà prise${dejaOccupees > 1 ? 's' : ''}, il reste ${placesDisponibles} place${placesDisponibles > 1 ? 's' : ''} disponible${placesDisponibles > 1 ? 's' : ''}.`;
+            alerteEl.style.display = '';
+        } else if (alerteEl) {
+            alerteEl.style.display = 'none';
+        }
+    }
+
+    function rechargerCreneaux() {
+        if (dateSelectionnee) chargerCreneaux(dateSelectionnee);
+    }
+
+    // ── PARTICIPANTS ──────────────────────────────────────────────────────────
+    const participants = new Map();
+
+    function getInitiales(nom) {
+        return nom.split(' ').map(p => p[0] || '').join('').toUpperCase().slice(0, 2);
+    }
+
+    function renderParticipants() {
+        const container  = document.getElementById('participantsList');
+        const noMsg      = document.getElementById('noParticipantsMsg');
+        const countEl    = document.getElementById('participantsCount');
+        const countText  = document.getElementById('participantsCountText');
+        const hiddenDiv  = document.getElementById('participantsHiddenFields');
+
+        container.querySelectorAll('.participant-badge').forEach(el => el.remove());
+        hiddenDiv.innerHTML = '';
+
+        if (participants.size === 0) {
+            noMsg.style.display = '';
+            countEl.style.display = 'none';
+            // Revenir au mode manuel
+            nbAutoFromParticipants = false;
+            syncNbUI();
+        } else {
+            noMsg.style.display = 'none';
+            countEl.style.display = '';
+            countText.textContent = `${participants.size} participant${participants.size > 1 ? 's' : ''} ajouté${participants.size > 1 ? 's' : ''}`;
+
+            // Mettre à jour nb_personnes automatiquement (participants + organisateur)
+            nbAutoFromParticipants = true;
+            nbPersonnes = participants.size + 1;
+            syncNbUI(true);
+
+            participants.forEach((p, username) => {
+                const badge = document.createElement('div');
+                badge.className = 'participant-badge';
+                badge.innerHTML = `
+                    <div class="avatar">${getInitiales(p.nom_complet)}</div>
+                    <span>${p.nom_complet}${p.promotion ? ' · ' + p.promotion : ''}</span>
+                    <button type="button" class="remove-btn" title="Retirer" onclick="removeParticipant('${username}')">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </button>`;
+                container.appendChild(badge);
+
+                const input = document.createElement('input');
+                input.type  = 'hidden';
+                input.name  = 'participants[]';
+                input.value = username;
+                hiddenDiv.appendChild(input);
+            });
+
+            rechargerCreneaux();
+        }
+    }
+
+    function addParticipant(user) {
+        if (user.username === MOI) { showTooltip("Vous êtes déjà le réservant !"); return; }
+        const plafond = getPlafond();
+        if (plafond && nbPersonnes >= plafond) {
+            const msg = placesDisponibles !== null && placesDisponibles < PLACES_MAX
+                ? `Seulement ${placesDisponibles} place${placesDisponibles > 1 ? 's' : ''} disponible${placesDisponibles > 1 ? 's' : ''} sur ce créneau.`
+                : `Capacité maximale atteinte (${plafond} places).`;
+            showTooltip(msg); return;
+        }
+        if (participants.has(user.username)) { showTooltip(`${user.nom_complet} est déjà ajouté.`); return; }
+        participants.set(user.username, user);
+        renderParticipants();
+        document.getElementById('rechercheInput').value = '';
+        hideResultats();
+    }
+
+    function removeParticipant(username) {
+        participants.delete(username);
+        renderParticipants();
+    }
+
+    function showTooltip(msg) {
+        const input = document.getElementById('rechercheInput');
+        input.setCustomValidity(msg);
+        input.reportValidity();
+        setTimeout(() => input.setCustomValidity(''), 2000);
+    }
+
+    // ── RECHERCHE UTILISATEURS ────────────────────────────────────────────────
+    let searchTimer = null;
+
+    document.getElementById('rechercheInput').addEventListener('input', function() {
+        clearTimeout(searchTimer);
+        const q = this.value.trim();
+        if (q.length < 2) { hideResultats(); return; }
+        searchTimer = setTimeout(() => lancerRecherche(q), 280);
+    });
+
+    document.getElementById('rechercheInput').addEventListener('focus', function() {
+        if (this.value.trim().length >= 2) lancerRecherche(this.value.trim());
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.search-wrapper')) hideResultats();
+    });
+
+    async function lancerRecherche(q) {
+        const spinner = document.getElementById('searchSpinner');
+        const box     = document.getElementById('rechercheResultats');
+        spinner.style.display = '';
+        try {
+            const resp = await fetch(`/api/users/search?q=${encodeURIComponent(q)}`);
+            const data = await resp.json();
+            spinner.style.display = 'none';
+            afficherResultats(data);
+        } catch(e) {
+            spinner.style.display = 'none';
+            box.innerHTML = '<div class="result-item text-danger small">Erreur de connexion.</div>';
+            box.style.display = '';
+        }
+    }
+
+    function afficherResultats(users) {
+        const box = document.getElementById('rechercheResultats');
+        if (!users.length) {
+            box.innerHTML = '<div class="result-item text-muted small fst-italic">Aucun résultat.</div>';
+            box.style.display = '';
+            return;
+        }
+        box.innerHTML = '';
+        users.forEach(u => {
+            const isAdded   = participants.has(u.username);
+            const isSelf    = u.username === MOI;
+            const isFull    = getPlafond() && nbPersonnes >= getPlafond() && !isAdded;
+            const item = document.createElement('div');
+            item.className = 'result-item d-flex align-items-center gap-2' + (isAdded || isSelf || isFull ? ' opacity-50' : '');
+            item.innerHTML = `
+                <div style="width:34px;height:34px;border-radius:50%;background:#6366f1;color:white;
+                            display:flex;align-items:center;justify-content:center;
+                            font-size:0.7rem;font-weight:700;flex-shrink:0;">
+                    ${getInitiales(u.nom_complet)}
+                </div>
+                <div class="flex-grow-1 min-w-0">
+                    <div class="nom">${escHtml(u.nom_complet)}</div>
+                    <div class="meta">
+                        ${u.promotion ? escHtml(u.promotion) + ' · ' : ''}
+                        ${u.numero_etudiant ? 'N°' + escHtml(u.numero_etudiant) : '@' + escHtml(u.username)}
+                        ${isSelf ? ' <span class="text-primary">(vous)</span>' : ''}
+                        ${isFull ? ' <span class="text-danger">(salle complète)</span>' : ''}
+                    </div>
+                </div>
+                ${isAdded ? '<i class="bi bi-check-circle-fill text-success"></i>' : ''}
+                ${!isAdded && !isSelf && !isFull ? '<i class="bi bi-plus-circle text-primary"></i>' : ''}
+            `;
+            if (!isAdded && !isSelf && !isFull) {
+                item.style.cursor = 'pointer';
+                item.addEventListener('click', () => addParticipant(u));
+            }
+            box.appendChild(item);
+        });
+        box.style.display = '';
+    }
+
+    function hideResultats() { document.getElementById('rechercheResultats').style.display = 'none'; }
+    function escHtml(str) {
+        return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── BARRE DE DATES ────────────────────────────────────────────────────────
+    function initDateBar() {
+        const container = document.getElementById('dateScroller');
+        const today = new Date();
+        for (let i = 0; i < 30; i++) {
+            const d = new Date();
+            d.setDate(today.getDate() + i);
+            const iso = formatISO(d);
+            const jourPy = (d.getDay() + 6) % 7;  // JS: 0=Dim..6=Sam → Python: 0=Lun..6=Dim
+            const ferme = !JOURS_OUVERTURE.includes(jourPy);
+            const btn = document.createElement('div');
+            btn.className = `date-btn ${i === 0 ? 'active' : ''} ${ferme ? 'date-btn-ferme' : ''}`;
+            btn.dataset.date = iso;
+            if (ferme) btn.title = 'Fermé ce jour-là';
+            btn.innerHTML = `
+                <div class="jour-nom">${d.toLocaleDateString('fr-FR',{weekday:'short'}).replace('.','')}</div>
+                <div class="jour-num">${d.getDate()}</div>
+                <div style="font-size:0.65rem;opacity:0.7;">${d.toLocaleDateString('fr-FR',{month:'short'})}</div>`;
+            btn.addEventListener('click', () => selectDate(iso, btn));
+            container.appendChild(btn);
+        }
+    }
+
+    function selectDate(iso, btnEl) {
+        document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('active'));
+        btnEl.classList.add('active');
+        dateSelectionnee = iso;
+        document.getElementById('inputDate').value = iso;
+        resetSelection();
+        chargerCreneaux(iso);
+    }
+
+    function formatISO(d) { return d.toISOString().split('T')[0]; }
+
+    // ── CRÉNEAUX ──────────────────────────────────────────────────────────────
+    async function chargerCreneaux(date) {
+        const grille = document.getElementById('grilleCréneaux');
+        grille.innerHTML = `<div class="text-muted small text-center w-100 py-3">
+            <div class="spinner-border spinner-border-sm me-2" role="status"></div>Chargement…</div>`;
+        try {
+            const resp = await fetch(`/api/creneaux/${NOM_SALLE}?date=${date}&nb_personnes=${nbPersonnes}`);
+            const data = await resp.json();
+            jourOuvert     = data.ouvert;
+            motifFermeture = data.motif_fermeture;
+            creneauxData   = data.creneaux || [];
+            afficherGrille();
+        } catch(e) {
+            grille.innerHTML = '<div class="text-danger small text-center w-100">Impossible de charger les créneaux.</div>';
+        }
+    }
+
+    function afficherGrille() {
+        const grille = document.getElementById('grilleCréneaux');
+        if (!jourOuvert) {
+            grille.innerHTML = `<div class="text-muted small text-center w-100 py-3">
+                <i class="bi bi-calendar-x fs-4 d-block mb-2 opacity-50"></i>
+                ${motifFermeture || 'Fermé ce jour-là.'}
+            </div>`;
+            return;
+        }
+        if (!creneauxData.length) {
+            grille.innerHTML = '<div class="text-muted small text-center w-100 py-2">Aucun créneau disponible.</div>';
+            return;
+        }
+        grille.innerHTML = '';
+        creneauxData.forEach((c, idx) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.dataset.idx   = idx;
+            btn.dataset.heure = c.heure;
+
+            let cls, label = c.heure, title = '';
+            if (!c.libre) {
+                if (c.type === 'cours')        { cls = 'creneau-cours';   title = 'Cours planifié'; }
+                else if (c.type === 'insuffisant') {
+                    cls = 'creneau-insuffisant';
+                    title = `Seulement ${c.places_restantes} place${c.places_restantes > 1 ? 's' : ''} restante${c.places_restantes > 1 ? 's' : ''}`;
+                    label = `${c.heure}<br><small style="font-size:0.6rem;">${c.places_restantes}pl.</small>`;
+                }
+                else if (c.type === 'reserve') { cls = 'creneau-reserve'; title = 'Complet'; }
+                else                           { cls = 'creneau-bloque';  title = 'Bloqué'; }
+                btn.disabled = true;
+            } else {
+                cls = 'creneau-libre';
+                if (c.places_restantes !== undefined) {
+                    title = `${c.places_restantes} place${c.places_restantes > 1 ? 's' : ''} restante${c.places_restantes > 1 ? 's' : ''}`;
+                    if (c.places_restantes < c.places_totales) {
+                        label = `${c.heure}<br><small style="font-size:0.6rem;opacity:0.75;">${c.places_restantes}/${c.places_totales}</small>`;
+                    }
+                }
+                btn.addEventListener('click', () => clicCreneau(idx));
+            }
+            btn.className = `creneau-btn ${cls}`;
+            btn.title     = title;
+            btn.innerHTML = `<div>${label}</div>`;
+            grille.appendChild(btn);
+        });
+    }
+
+    // ── SÉLECTION (clic début puis clic fin) ─────────────────────────────────
+    //
+    // Sémantique :
+    //   - 1er clic  → selDebut = idx du créneau de début (ex: 8h30)
+    //   - 2e clic   → selFin   = idx du créneau de fin   (ex: 10h30)
+    //
+    // L'heure de fin envoyée au serveur est DIRECTEMENT creneauxData[selFin].heure,
+    // sans ajouter 30 min. Ainsi cliquer 8h30 → 10h30 réserve bien de 8h30 à 10h30.
+    //
+    // Contraintes :
+    //   - selFin doit être STRICTEMENT après selDebut (selFin > selDebut)
+    //     → sinon la durée serait 0, ce que le serveur rejette.
+    //   - Les créneaux intermédiaires (selDebut+1 à selFin-1) doivent être libres.
+    //   - Le créneau selFin lui-même n'a pas besoin d'être libre
+    //     (il marque juste l'heure de fin, pas un créneau à occuper).
+
+    function clicCreneau(idx) {
+        if (selDebut === null) {
+            // Premier clic : choix du début
+            selDebut = idx;
+            selFin   = null;
+            // Mettre à jour le plafond avec les places réelles du créneau sélectionné
+            const c = creneauxData[idx];
+            placesDisponibles = (c && c.places_restantes !== undefined) ? c.places_restantes : null;
+            // Si l'utilisateur avait déjà mis plus de personnes que disponible, on ramène au max
+            if (placesDisponibles !== null && nbPersonnes > placesDisponibles) {
+                nbPersonnes = Math.max(1, placesDisponibles);
+            }
+            syncNbUI();
+        } else if (idx <= selDebut) {
+            // Clic sur le même créneau ou avant → redémarrer la sélection depuis ce point
+            selDebut = idx;
+            selFin   = null;
+            const c = creneauxData[idx];
+            placesDisponibles = (c && c.places_restantes !== undefined) ? c.places_restantes : null;
+            if (placesDisponibles !== null && nbPersonnes > placesDisponibles) {
+                nbPersonnes = Math.max(1, placesDisponibles);
+            }
+            syncNbUI();
+        } else {
+            // Deuxième clic : choix de la fin
+            // Vérifier qu'aucun créneau entre debut (exclu) et fin (exclu) n'est bloqué
+            let conflit = false;
+            for (let i = selDebut + 1; i < idx; i++) {
+                if (!creneauxData[i].libre) { conflit = true; break; }
+            }
+            if (conflit) {
+                // Conflit intermédiaire : on redémarre depuis le créneau cliqué
+                selDebut = idx;
+                selFin   = null;
+            } else {
+                selFin = idx;
+            }
+        }
+        updateGrilleUI();
+        updateResume();
+    }
+
+    function updateGrilleUI() {
+        document.querySelectorAll('.creneau-btn').forEach((btn, idx) => {
+            if (btn.disabled) return;
+            btn.classList.remove('selected', 'fin-selected', 'range-selected');
+            if (selDebut !== null && selFin !== null) {
+                if (idx === selDebut) {
+                    btn.classList.add('selected');
+                } else if (idx === selFin) {
+                    btn.classList.add('fin-selected');
+                } else if (idx > selDebut && idx < selFin) {
+                    btn.classList.add('range-selected');
+                }
+            } else if (selDebut !== null && idx === selDebut) {
+                btn.classList.add('selected');
+            }
+        });
+    }
+
+    function updateResume() {
+        const resume      = document.getElementById('resumeSelection');
+        const btnValider  = document.getElementById('btnValider');
+        const msgDisabled = document.getElementById('msgBtnDisabled');
+
+        if (selDebut !== null && selFin !== null) {
+            // L'heure de début = heure du créneau selDebut
+            const heureD = creneauxData[selDebut].heure;
+            // L'heure de fin = heure du créneau selFin (directement, sans +30 min)
+            const heureF = creneauxData[selFin].heure;
+
+            document.getElementById('displayDebut').textContent = heureD;
+            document.getElementById('displayFin').textContent   = heureF;
+
+            // Durée = nombre de créneaux entre debut et fin (non inclus) * 30 min
+            const dureeMin = (selFin - selDebut) * 30;
+            const h = Math.floor(dureeMin / 60), m = dureeMin % 60;
+            document.getElementById('displayDuree').textContent =
+                h > 0 ? `${h}h${m > 0 ? m + 'min' : ''} · ${nbPersonnes} personne${nbPersonnes > 1 ? 's' : ''}` : `${m} min · ${nbPersonnes} personne${nbPersonnes > 1 ? 's' : ''}`;
+
+            document.getElementById('inputHeureDebut').value = heureD;
+            document.getElementById('inputHeureFin').value   = heureF;
+            resume.style.display      = 'block';
+            btnValider.disabled       = false;
+            msgDisabled.style.display = 'none';
+        } else if (selDebut !== null) {
+            resume.style.display      = 'none';
+            btnValider.disabled       = true;
+            msgDisabled.textContent   = 'Cliquez maintenant sur le créneau de fin';
+            msgDisabled.style.display = 'block';
+        } else {
+            resume.style.display      = 'none';
+            btnValider.disabled       = true;
+            msgDisabled.textContent   = 'Sélectionnez un créneau pour continuer';
+            msgDisabled.style.display = 'block';
+        }
+    }
+
+    function resetSelection() {
+        selDebut = null; selFin = null;
+        placesDisponibles = null;
+        syncNbUI();
+        document.getElementById('inputHeureDebut').value = '';
+        document.getElementById('inputHeureFin').value   = '';
+        updateGrilleUI();
+        updateResume();
+    }
+
+    // ── VALIDATION ──────────────────────────────────────────────────────────
+    document.getElementById('formReservation').addEventListener('submit', function(e) {
+        if (!document.getElementById('inputHeureDebut').value) {
+            e.preventDefault();
+            alert('Veuillez sélectionner un créneau horaire.');
+        }
+    });
+
+    // ── INIT ──────────────────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+        initDateBar();
+        chargerCreneaux(dateSelectionnee);
+        syncNbUI();
+        renderParticipants();
+        document.querySelectorAll('.toast').forEach(toastEl => {
+            setTimeout(() => bootstrap.Toast.getOrCreateInstance(toastEl).hide(), 4000);
+        });
+    });
+</script>
+
+{% endblock %}

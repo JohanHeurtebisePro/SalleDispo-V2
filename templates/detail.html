@@ -1,0 +1,1077 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* CSS BARRE DATES */
+    .date-scroller { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 10px; scrollbar-width: none; -ms-overflow-style: none; }
+    .date-scroller::-webkit-scrollbar { display: none; }
+    .date-btn {
+        min-width: 75px; text-align: center; padding: 12px 5px; border-radius: 16px;
+        background: var(--date-btn-bg); border: 1px solid var(--date-btn-border);
+        cursor: pointer; transition: 0.2s; flex-shrink: 0;
+        color: var(--date-btn-color);
+    }
+    .date-btn:hover { background: var(--date-btn-hover); transform: translateY(-2px); }
+    .date-btn.active { background: #0d6efd; color: white; border-color: #0d6efd; box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3); }
+    .date-btn .jour-nom { font-size: 0.75rem; text-transform: uppercase; font-weight: 700; }
+    .date-btn .jour-num { font-size: 1.3rem; font-weight: 700; line-height: 1.2; }
+
+    /* CSS BATIMENT & AILES */
+    .building-container {
+        background-color: var(--building-bg); border: 2px solid var(--building-border);
+        border-radius: 12px; padding: 10px; width: 140px; margin: 0 auto;
+        box-shadow: 5px 5px 0px var(--building-shadow);
+    }
+    .etage-bloc {
+        background-color: var(--etage-bg); border: 1px solid var(--etage-border);
+        border-radius: 6px; margin-bottom: 4px; display: flex;
+        justify-content: center; align-items: center; height: 40px;
+        font-size: 0.9rem; font-weight: 500; color: var(--etage-color);
+    }
+    .etage-bloc.active { background-color: #343a40; color: white; border-color: #343a40; font-weight: bold; transform: scale(1.05); }
+
+    .wing-card {
+        border-radius: 15px; padding: 20px; text-align: center;
+        border: 2px dashed var(--wing-border); background: var(--wing-bg);
+        opacity: 0.5; transition: 0.3s; color: var(--wing-color);
+    }
+    .wing-card.active { opacity: 1; border: 2px solid #0d6efd; background: var(--wing-active-bg); color: #0d6efd; transform: scale(1.05); box-shadow: 0 5px 15px rgba(13, 110, 253, 0.2); }
+    .wing-icon { font-size: 2.5rem; margin-bottom: 10px; display: block; }
+    .wing-title { font-weight: bold; font-size: 0.9rem; }
+    .wing-desc { font-size: 0.7rem; color: inherit; }
+
+    .nav-tabs .nav-link { color: var(--tab-color); font-weight: 600; border: none; padding-bottom: 12px; }
+    .nav-tabs .nav-link.active { color: #0d6efd; border-bottom: 3px solid #0d6efd; background: transparent; }
+    .nav-tabs { border-bottom: 1px solid var(--tab-border); margin-bottom: 20px; }
+
+    /* Planning calendrier */
+    #cours-container {
+        overflow-x: hidden;
+        overflow-y: visible;
+        padding-bottom: 16px;
+    }
+
+    /* Événement réservation dans le planning */
+    .event-reservation {
+        background: linear-gradient(135deg, #f0fdf4, #dcfce7) !important;
+        border-left: 3px solid #22c55e !important;
+    }
+
+    /* ── GALERIE PHOTOS ── */
+    .photo-gallery {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 10px;
+    }
+    .photo-thumb {
+        position: relative;
+        aspect-ratio: 4/3;
+        border-radius: 12px;
+        overflow: hidden;
+        cursor: pointer;
+        background: var(--photo-bg);
+        border: 1px solid var(--photo-border);
+        display: block;
+    }
+    /* Quand photo-thumb est dans une colonne flex (grille vedette droite) */
+    .d-flex.flex-column .photo-thumb {
+        aspect-ratio: unset;
+        min-height: 80px;
+    }
+    .photo-thumb img {
+        width: 100%; height: 100%;
+        object-fit: cover;
+        transition: transform 0.3s ease;
+    }
+    .photo-thumb:hover img { transform: scale(1.06); }
+    .photo-thumb .legende-overlay {
+        position: absolute; bottom: 0; left: 0; right: 0;
+        background: linear-gradient(to top, rgba(0,0,0,0.65), transparent);
+        color: white; font-size: 0.65rem; padding: 8px 6px 4px;
+        opacity: 0; transition: opacity 0.2s;
+    }
+    .photo-thumb:hover .legende-overlay { opacity: 1; }
+
+    /* Lightbox */
+    #lightbox {
+        display: none; position: fixed; inset: 0;
+        background: rgba(0,0,0,0.92); z-index: 9999;
+        align-items: center; justify-content: center; flex-direction: column;
+    }
+    #lightbox.open { display: flex; }
+    #lightbox img { max-width: 92vw; max-height: 80vh; border-radius: 12px; object-fit: contain; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+    #lightbox .lb-caption { color: rgba(255,255,255,0.7); font-size: 0.9rem; margin-top: 14px; text-align: center; }
+    #lightbox .lb-close { position: absolute; top: 20px; right: 24px; color: white; font-size: 2rem; cursor: pointer; opacity: 0.7; line-height: 1; }
+    #lightbox .lb-close:hover { opacity: 1; }
+    #lightbox .lb-nav { position: absolute; top: 50%; transform: translateY(-50%); color: white; font-size: 2.5rem; cursor: pointer; opacity: 0.5; padding: 10px; user-select: none; }
+    #lightbox .lb-nav:hover { opacity: 1; }
+    #lightbox .lb-prev { left: 16px; }
+    #lightbox .lb-next { right: 16px; }
+
+    /* ── DARK MODE VARIABLES (detail page) ── */
+    :root {
+        --date-btn-bg: white;
+        --date-btn-border: #e0e0e0;
+        --date-btn-color: #212529;
+        --date-btn-hover: #f1f3f5;
+        --building-bg: #f8f9fa;
+        --building-border: #dee2e6;
+        --building-shadow: #e9ecef;
+        --etage-bg: white;
+        --etage-border: #e0e0e0;
+        --etage-color: #212529;
+        --wing-border: #e0e0e0;
+        --wing-bg: #fafafa;
+        --wing-color: #212529;
+        --wing-active-bg: #e7f1ff;
+        --tab-color: #6c757d;
+        --tab-border: #eee;
+        --photo-bg: #f1f5f9;
+        --photo-border: transparent;
+        --card-text: #212529;
+        --card-muted: #6c757d;
+        --card-surface: white;
+        --card-surface-border: #e5e7eb;
+        --signalement-bg: rgba(255, 193, 7, 0.08);
+        --timeline-line: #f3f4f6;
+        --resa-card-bg: #f0fdf4;
+        --resa-card-border: #dcfce7;
+        --localisation-alert-bg: #f8f9fa;
+    }
+    [data-bs-theme="dark"] {
+        --date-btn-bg: #1f2937;
+        --date-btn-border: #374151;
+        --date-btn-color: #e5e7eb;
+        --date-btn-hover: #374151;
+        --building-bg: #111827;
+        --building-border: #374151;
+        --building-shadow: #0d1117;
+        --etage-bg: #1f2937;
+        --etage-border: #374151;
+        --etage-color: #d1d5db;
+        --wing-border: #374151;
+        --wing-bg: #1a1f2e;
+        --wing-color: #9ca3af;
+        --wing-active-bg: rgba(13, 110, 253, 0.15);
+        --tab-color: #9ca3af;
+        --tab-border: #374151;
+        --photo-bg: #1f2937;
+        --photo-border: #374151;
+        --card-text: #f3f4f6;
+        --card-muted: #9ca3af;
+        --card-surface: #1f2937;
+        --card-surface-border: #374151;
+        --signalement-bg: rgba(253, 186, 0, 0.08);
+        --timeline-line: #374151;
+        --resa-card-bg: rgba(34, 197, 94, 0.08);
+        --resa-card-border: rgba(34, 197, 94, 0.25);
+        --localisation-alert-bg: #1f2937;
+    }
+
+    /* Cartes principales en dark mode */
+    [data-bs-theme="dark"] .card {
+        background-color: var(--card-surface) !important;
+        border-color: var(--card-surface-border) !important;
+        color: var(--card-text) !important;
+    }
+    [data-bs-theme="dark"] .text-dark { color: var(--card-text) !important; }
+    [data-bs-theme="dark"] .text-muted { color: var(--card-muted) !important; }
+    [data-bs-theme="dark"] .border-bottom { border-color: var(--card-surface-border) !important; }
+    [data-bs-theme="dark"] .bg-light { background-color: #1a1f2e !important; }
+
+    /* Signalements dark */
+    [data-bs-theme="dark"] .bg-warning.bg-opacity-10 { background-color: var(--signalement-bg) !important; }
+    [data-bs-theme="dark"] .border-warning { border-color: rgba(253, 186, 0, 0.3) !important; }
+
+    /* Statut d'un signalement (vue publique) */
+    .pub-statut-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        font-size: 0.68rem; font-weight: 700; padding: 3px 9px; border-radius: 20px;
+        border: 1px solid transparent; white-space: nowrap;
+    }
+    .pub-statut-badge.nouveau  { background: rgba(253, 186, 0, 0.15); color: #b45309; border-color: rgba(253, 186, 0, 0.35); }
+    [data-bs-theme="dark"] .pub-statut-badge.nouveau { color: #fbbf24; }
+    .pub-statut-badge.en_cours { background: rgba(59, 130, 246, 0.15); color: #2563eb; border-color: rgba(59, 130, 246, 0.35); }
+    [data-bs-theme="dark"] .pub-statut-badge.en_cours { color: #60a5fa; }
+    .pub-statut-badge.resolu  { background: rgba(34, 197, 94, 0.15); color: #16a34a; border-color: rgba(34, 197, 94, 0.35); }
+    [data-bs-theme="dark"] .pub-statut-badge.resolu { color: #4ade80; }
+    .pub-incident-item.is-resolu { opacity: 0.65; }
+    .pub-statut-note {
+        font-size: 0.72rem; color: var(--card-muted); margin-top: 4px;
+        border-left: 2px solid var(--card-surface-border); padding-left: 8px;
+    }
+
+    /* Carte réservation dark — ma réservation (verte) */
+    [data-bs-theme="dark"] .event-reservation {
+        background: linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(34, 197, 94, 0.06)) !important;
+    }
+    [data-bs-theme="dark"] .bg-success.bg-opacity-10 { background-color: rgba(34, 197, 94, 0.12) !important; }
+    [data-bs-theme="dark"] .bg-light.bg-opacity-50 { background-color: rgba(255,255,255,0.05) !important; }
+
+    /* Timeline ligne verticale dark */
+    [data-bs-theme="dark"] .bg-light[style*="width: 2px"] { background-color: var(--timeline-line) !important; }
+
+    /* Alerte localisation dark */
+    [data-bs-theme="dark"] .alert-light { background-color: var(--localisation-alert-bg) !important; border-color: var(--card-surface-border) !important; color: var(--card-text) !important; }
+
+    /* Statut bulle dark — texte lisible */
+    [data-bs-theme="dark"] h5.fw-bold.text-dark { color: var(--card-text) !important; }
+    [data-bs-theme="dark"] p.text-muted { color: var(--card-muted) !important; }
+
+    /* Card hover dark */
+    [data-bs-theme="dark"] .card-hover:hover { box-shadow: 0 15px 30px rgba(0,0,0,0.4); }
+
+    /* Bouton réservée (RÉSERVÉ) dark */
+    [data-bs-theme="dark"] button[style*="background:#fef9c3"] {
+        background: #422006 !important;
+        color: #fde68a !important;
+        border-color: #854d0e !important;
+    }
+</style>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 2000;">
+      {% for category, message in messages %}
+        <div class="toast align-items-center text-white bg-{{ 'success' if category == 'success' else 'danger' if category == 'danger' else 'warning' }} border-0 show mb-2" role="alert" aria-live="assertive">
+          <div class="d-flex">
+            <div class="toast-body fw-semibold">{{ message }}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<div class="row justify-content-center mt-3">
+    <div class="col-lg-4 mb-4">
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary mb-3 rounded-pill px-4">
+            <i class="bi bi-arrow-left"></i> Tableau de bord
+        </a>
+        {% else %}
+        <a href="/" class="btn btn-outline-secondary mb-3 rounded-pill px-4">
+            <i class="bi bi-arrow-left"></i> Retour
+        </a>
+        {% endif %}
+
+        {# ── STATUT PRINCIPAL — Proposition B : Photo hero + badge flottant ── #}
+        <div class="card border-0 shadow-sm mb-3 overflow-hidden" style="border-radius: 20px;">
+
+            {# ── Hero : photo si dispo, sinon dégradé coloré selon statut ── #}
+            <div class="position-relative" style="height: 160px; overflow: hidden;">
+                {% if photos %}
+                    {# Première photo en fond ── #}
+                    <img src="{{ url_for('static', filename='uploads/salles/' + photos[0].filename) }}"
+                         alt="{{ infos.nom_complet }}"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                    {# Dégradé assombri en bas pour lisibilité du nom ── #}
+                    <div style="position:absolute; inset:0; background: linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.55) 100%);"></div>
+                {% else %}
+                    {# Fallback : fond coloré selon statut ── #}
+                    <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center;
+                                background: {% if etat.etat == 'OCCUPÉ' %}linear-gradient(135deg,#991b1b,#dc3545){% elif etat.etat == 'RÉSERVÉ' or etat.etat == 'PARTIEL' %}linear-gradient(135deg,#92400e,#d97706){% elif etat.etat == 'BLOQUÉ' %}linear-gradient(135deg,#0f172a,#1e293b){% else %}linear-gradient(135deg,#14532d,#198754){% endif %};">
+                        <i class="bi bi-building text-white" style="font-size:3.5rem; opacity:0.18;"></i>
+                    </div>
+                {% endif %}
+
+                {# Nom de la salle (bas gauche) ── #}
+                <div class="position-absolute bottom-0 start-0 ps-3 pb-2">
+                    <h2 class="fw-bold mb-0 text-white" style="text-shadow: 0 1px 6px rgba(0,0,0,0.5); font-size:1.5rem;">{{ infos.nom_complet }}</h2>
+                    {% if etage_courant is not none %}
+                    <div style="font-size:0.72rem; color:rgba(255,255,255,0.75); text-shadow:0 1px 4px rgba(0,0,0,0.5);">
+                        <i class="bi bi-geo-alt-fill me-1"></i>{% if etage_courant == 0 %}RDC{% else %}Étage {{ etage_courant }}{% endif %} · Aile {{ aile|capitalize }}
+                    </div>
+                    {% endif %}
+                </div>
+
+                {# Badge statut (haut droite) ── #}
+                <div class="position-absolute top-0 end-0 m-2">
+                    <span class="badge fw-bold px-3 py-2 shadow-sm"
+                          style="font-size:0.78rem; letter-spacing:0.4px; border-radius:20px;
+                                 background-color: {% if etat.etat == 'OCCUPÉ' %}#dc3545{% elif etat.etat == 'RÉSERVÉ' %}#d97706{% elif etat.etat == 'PARTIEL' %}#d97706{% elif etat.etat == 'BLOQUÉ' %}#1f2937{% else %}#198754{% endif %}; color:white;">
+                        <i class="bi {% if etat.etat == 'OCCUPÉ' %}bi-x-circle-fill{% elif etat.etat == 'RÉSERVÉ' or etat.etat == 'PARTIEL' %}bi-clock-fill{% elif etat.etat == 'BLOQUÉ' %}bi-lock-fill{% else %}bi-check-circle-fill{% endif %} me-1"></i>
+                        {{ etat.etat }}
+                    </span>
+                </div>
+            </div>
+
+            {# ── Corps de la card ── #}
+            <div class="card-body pt-3 pb-3 px-4">
+
+                {# Chips équipements ── #}
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background:var(--surface-hover); color:var(--text-muted); font-size:0.72rem; border:1px solid var(--surface-border);">
+                        <i class="bi bi-people-fill me-1"></i>{{ infos.places }} places
+                    </span>
+                    {% if infos.pc %}
+                    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background:var(--surface-hover); color:var(--text-muted); font-size:0.72rem; border:1px solid var(--surface-border);">
+                        <i class="bi bi-pc-display me-1"></i>PC étudiant
+                    </span>
+                    {% endif %}
+                    {% if infos.projecteur %}
+                    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background:var(--surface-hover); color:var(--text-muted); font-size:0.72rem; border:1px solid var(--surface-border);">
+                        <i class="bi bi-projector-fill me-1"></i>Vidéo-proj
+                    </span>
+                    {% endif %}
+                    {% if infos.tableau %}
+                    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background:var(--surface-hover); color:var(--text-muted); font-size:0.72rem; border:1px solid var(--surface-border);">
+                        <i class="bi bi-easel2-fill me-1"></i>Tableau
+                    </span>
+                    {% endif %}
+                    {# ── Horaires d'ouverture du site ── #}
+                    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background:var(--surface-hover); color:var(--text-muted); font-size:0.72rem; border:1px solid var(--surface-border);" title="Horaires d'ouverture">
+                        <i class="bi bi-clock-history me-1"></i>{{ horaires_salle.heure_ouverture }} – {{ horaires_salle.heure_fermeture }}
+                    </span>
+                    {# ── Jours d'ouverture du site ── #}
+                    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background:var(--surface-hover); color:var(--text-muted); font-size:0.72rem; border:1px solid var(--surface-border);" title="Jours d'ouverture">
+                        <i class="bi bi-calendar-week me-1"></i>{{ horaires_salle.jours_ouverture | fmt_jours(abbr=true) }}
+                    </span>
+                </div>
+
+                <h5 class="fw-bold mb-1" style="color:var(--text-heading);">{{ etat.msg }}</h5>
+                <p class="text-muted small mb-3">{{ etat.sub_msg }}</p>
+
+                {% if etat.etat == "PARTIEL" %}
+                <div class="d-flex justify-content-center gap-3 mb-3 text-center">
+                    <div class="px-3 py-2 rounded-3" style="background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.25);">
+                        <div class="fw-bold" style="color:#eab308;font-size:1.3rem;">{{ etat.nb_resas }}</div>
+                        <div class="text-muted" style="font-size:0.72rem;">réservation{{ 's' if etat.nb_resas > 1 }}</div>
+                    </div>
+                    <div class="px-3 py-2 rounded-3" style="background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.25);">
+                        <div class="fw-bold" style="color:#eab308;font-size:1.3rem;">{{ etat.places_occupees }}/{{ etat.places_totales }}</div>
+                        <div class="text-muted" style="font-size:0.72rem;">places occupées</div>
+                    </div>
+                    <div class="px-3 py-2 rounded-3" style="background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.25);">
+                        <div class="fw-bold" style="color:#eab308;font-size:1.3rem;">{{ etat.places_restantes }}</div>
+                        <div class="text-muted" style="font-size:0.72rem;">place{{ 's' if etat.places_restantes > 1 }} libre{{ 's' if etat.places_restantes > 1 }}</div>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if etat.etat == "RÉSERVÉ" and etat.nb_resas > 1 %}
+                <div class="text-start rounded-3 p-3 mb-3" style="background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.25);">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <i class="bi bi-calendar2-check text-warning"></i>
+                        <span class="fw-semibold small">{{ etat.nb_resas }} réservations simultanées</span>
+                        <span class="badge rounded-pill ms-auto" style="background:rgba(234,179,8,0.15);color:#854d0e;font-size:0.65rem;">En cours</span>
+                    </div>
+                    <div class="small text-muted">
+                        <i class="bi bi-clock me-1"></i>Fin à {{ etat.resa_fin }}
+                    </div>
+                    <div class="small text-muted mt-1 fst-italic">
+                        <i class="bi bi-calendar-week me-1"></i>Consultez le planning pour le détail.
+                    </div>
+                </div>
+                {% elif etat.etat == "RÉSERVÉ" and etat.resa_nom_org %}
+                <div class="text-start rounded-3 p-3 mb-3" style="background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.25);">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <i class="bi bi-person-fill text-warning"></i>
+                        <span class="fw-semibold small">{{ etat.resa_nom_org }}</span>
+                        <span class="badge rounded-pill ms-auto" style="background:rgba(234,179,8,0.15);color:#854d0e;font-size:0.65rem;">Organisateur</span>
+                    </div>
+                    <div class="small text-muted mb-1">
+                        <i class="bi bi-clock me-1"></i>{{ etat.resa_debut }} → {{ etat.resa_fin }}
+                        <span class="ms-1 badge bg-secondary bg-opacity-10 text-secondary">
+                            {% set h = etat.resa_duree_min // 60 %}{% set m = etat.resa_duree_min % 60 %}{% if h %}{{ h }}h{% endif %}{% if m %}{{ m }}min{% endif %}
+                        </span>
+                    </div>
+                    {% if etat.resa_motif %}
+                    <div class="small text-muted">
+                        <i class="bi bi-chat-left-text me-1"></i>{{ etat.resa_motif }}
+                    </div>
+                    {% endif %}
+                    {% if etat.resa_participants %}
+                    <div class="mt-2 pt-2 border-top border-warning border-opacity-25">
+                        <div class="small text-muted mb-1"><i class="bi bi-people me-1"></i>Participants</div>
+                        {% for p in etat.resa_participants %}
+                        <span class="badge rounded-pill me-1 mb-1" style="background:rgba(234,179,8,0.1);color:#854d0e;font-size:0.68rem;">{{ p.nom_complet or p.username }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% if etat.etat == "OCCUPÉ" or etat.etat == "RÉSERVÉ" %}
+                    <div class="progress mt-2 shadow-sm" style="height: 6px; border-radius: 10px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-{{ etat.color }}"
+                             role="progressbar" style="width: {{ etat.progression }}%"></div>
+                    </div>
+                    <div class="d-flex justify-content-between mt-1">
+                        <small class="text-muted">Début</small>
+                        <small class="fw-bold text-{{ etat.color }}">{{ etat.progression }}%</small>
+                        <small class="text-muted">Fin</small>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# ── BOUTON DE RÉSERVATION ── #}
+        {% if not current_user.is_admin() %}
+        <div class="mb-3">
+            {% if ma_reservation %}
+                <div class="card border-0 shadow-sm p-3" style="border-radius: 16px; background: var(--resa-card-bg); border-left: 4px solid #22c55e !important; border-left-style: solid !important;">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <i class="bi bi-calendar-check-fill text-success"></i>
+                        <strong class="text-success">Votre réservation</strong>
+                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 ms-auto">#{{ ma_reservation.id }}</span>
+                    </div>
+                    <div class="small text-dark mb-1">
+                        <i class="bi bi-clock me-1 text-muted"></i>
+                        {{ ma_reservation.date_debut[0:10] }} • {{ ma_reservation.date_debut[11:16] }} → {{ ma_reservation.date_fin[11:16] }}
+                    </div>
+                    <div class="small text-muted mb-3">
+                        <i class="bi bi-chat-left-text me-1"></i>{{ ma_reservation.motif }}
+                    </div>
+                    <form action="/annuler/{{ ma_reservation.id }}" method="POST" onsubmit="return confirm('Annuler votre réservation ?')">
+                        <input type="hidden" name="next" value="/salle/{{ nom }}">
+                        <button class="btn btn-sm btn-outline-danger w-100 rounded-pill">
+                            <i class="bi bi-x-circle me-1"></i> Annuler ma réservation
+                        </button>
+                    </form>
+                </div>
+            {% elif etat.etat == "LIBRE" %}
+                <a href="/reserver/{{ nom }}" class="btn btn-success w-100 py-3 rounded-pill fw-bold shadow-sm">
+                    <i class="bi bi-calendar-plus me-2"></i> Réserver cette salle
+                </a>
+            {% elif etat.etat == "PARTIEL" %}
+                <a href="/reserver/{{ nom }}" class="btn w-100 py-3 rounded-pill fw-bold shadow-sm" style="background:#eab308; color:#1a1a1a; border:none;">
+                    <i class="bi bi-calendar-plus me-2"></i> Réserver · {{ etat.places_restantes }} place{{ 's' if etat.places_restantes > 1 }} disponible{{ 's' if etat.places_restantes > 1 }}
+                </a>
+            {% elif etat.etat == "RÉSERVÉ" %}
+                <div class="d-grid gap-2">
+                    <button class="btn w-100 py-2 rounded-pill fw-bold" disabled
+                            style="background:#fef9c3; color:#854d0e; border:1px solid #fde047; font-size:0.9rem;">
+                        <i class="bi bi-person-check me-2"></i> Réservée · libre à {{ etat.resa_fin }}
+                    </button>
+                    <a href="/reserver/{{ nom }}" class="btn btn-outline-warning w-100 py-2 rounded-pill fw-semibold" style="font-size:0.875rem;">
+                        <i class="bi bi-calendar-plus me-2"></i> Réserver pour un autre créneau
+                    </a>
+                </div>
+            {% elif etat.etat == "OCCUPÉ" %}
+                <div class="d-grid gap-2">
+                    <button class="btn btn-danger w-100 py-2 rounded-pill fw-bold" disabled style="font-size:0.9rem; opacity:0.75;">
+                        <i class="bi bi-x-circle me-2"></i> Cours en cours · occupée
+                    </button>
+                    <a href="/reserver/{{ nom }}" class="btn btn-outline-primary w-100 py-2 rounded-pill fw-semibold" style="font-size:0.875rem;">
+                        <i class="bi bi-calendar-plus me-2"></i> Réserver pour un autre créneau
+                    </a>
+                </div>
+            {% elif etat.etat == "BLOQUÉ" %}
+                <button class="btn w-100 py-3 rounded-pill fw-bold text-white" disabled
+                        style="background:#1f2937; border-color:#374151;">
+                    <i class="bi bi-lock-fill me-2"></i> Bloquée par l'administration
+                </button>
+            {% else %}
+                <button class="btn btn-secondary w-100 py-3 rounded-pill fw-bold" disabled>
+                    <i class="bi bi-lock me-2"></i> Salle non disponible
+                </button>
+            {% endif %}
+
+            {# ── RÉSERVATIONS OÙ L'USER EST INVITÉ ── #}
+            {% for r in resas_invite %}
+                <div class="card border-0 shadow-sm p-3 mt-2" style="border-radius: 16px; background: rgba(168,85,247,0.06); border-left: 4px solid #a855f7 !important; border-left-style: solid !important;">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <i class="bi bi-people-fill" style="color:#a855f7;"></i>
+                        <strong style="color:#7e22ce;">Vous êtes invité</strong>
+                        <span class="badge ms-auto border" style="background:rgba(168,85,247,0.1);color:#6b21a8;border-color:rgba(168,85,247,0.3)!important;font-size:0.7rem;">#{{ r.id }}</span>
+                    </div>
+                    <div class="small text-dark mb-1">
+                        <i class="bi bi-clock me-1 text-muted"></i>
+                        {{ r.date_debut[0:10] }} • {{ r.date_debut[11:16] }} → {{ r.date_fin[11:16] }}
+                    </div>
+                    <div class="small text-muted mb-1">
+                        <i class="bi bi-person-fill me-1"></i>Organisateur : <strong>{{ r.nom_org }}</strong>
+                    </div>
+                    <div class="small text-muted">
+                        <i class="bi bi-chat-left-text me-1"></i>{{ r.motif }}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {# ── SIGNALEMENTS ── #}
+        <div class="card border-0 shadow-sm p-3 mb-3 overflow-hidden" style="border-radius: 20px;">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="fw-bold m-0 fs-6"><i class="bi bi-exclamation-triangle-fill text-warning"></i> Signalements</h5>
+                <button class="btn btn-sm btn-outline-danger rounded-pill" data-bs-toggle="modal" data-bs-target="#modalSignalement">
+                    + Signaler
+                </button>
+            </div>
+
+            {% if incidents %}
+                <div class="bg-warning bg-opacity-10 border border-warning border-opacity-25 rounded-3 p-3 mt-2">
+                    {% for inc in incidents %}
+                        {% set statut = inc.get('statut', 'nouveau') %}
+                        <div class="mb-2 border-bottom border-warning border-opacity-25 pb-2 pub-incident-item {{ 'is-resolu' if statut == 'resolu' }}">
+                            <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                                <strong class="small" style="color: var(--card-text);">{{ inc.type }}</strong>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="pub-statut-badge {{ statut }}">
+                                        {% if statut == 'nouveau' %}🔔 Signalé{% elif statut == 'en_cours' %}🔧 En cours de traitement{% else %}✅ Résolu{% endif %}
+                                    </span>
+                                    <span class="text-muted" style="font-size: 0.7rem;">{{ inc.date }}</span>
+                                </div>
+                            </div>
+                            <p class="mb-0 small text-muted lh-sm">{{ inc.desc }}</p>
+                            {% if inc.get('note_admin') %}
+                            <p class="pub-statut-note mb-0">
+                                <i class="bi bi-chat-left-text"></i> {{ inc.note_admin }}
+                                {% if inc.get('date_maj') %}<span class="text-muted"> · {{ inc.date_maj }}</span>{% endif %}
+                            </p>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-muted small mb-0 fst-italic text-center py-2">
+                    <i class="bi bi-check-circle text-success"></i> Aucun problème signalé.
+                </p>
+            {% endif %}
+        </div>
+
+        {# ── DESCRIPTION ── #}
+        {% if infos.description %}
+        <div class="card border-0 shadow-sm p-3 mb-3" style="border-radius: 16px;">
+            <p class="small text-muted mb-0"><i class="bi bi-info-circle me-1"></i>{{ infos.description }}</p>
+        </div>
+        {% endif %}
+
+    </div>{# fin col-lg-4 #}
+
+    {# ── COLONNE DROITE : Planning + Localisation + Photos ── #}
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm p-4 mb-4" style="border-radius: 20px; min-height: 600px;">
+            <ul class="nav nav-tabs" id="myTab" role="tablist">
+                <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#planning"><i class="bi bi-calendar-week"></i> Planning</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#plan"><i class="bi bi-building"></i> Localisation</button></li>
+                {% if photos %}
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#photos-tab">
+                        <i class="bi bi-images"></i> Photos
+                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 ms-1" style="font-size:0.65rem;">{{ photos|length }}</span>
+                    </button>
+                </li>
+                {% endif %}
+            </ul>
+
+            <div class="tab-content" id="myTabContent">
+                <div class="tab-pane fade show active" id="planning">
+                    <div id="date-container" class="date-scroller mb-4 pb-2"></div>
+                    <h5 id="date-titre" class="fw-bold mb-3 border-bottom pb-2">Aujourd'hui</h5>
+                    <div id="cours-container"></div>
+                </div>
+
+                <div class="tab-pane fade" id="plan">
+                    <div class="text-center pt-3">
+                        <h5 class="fw-bold mb-4">Où se trouve la salle ?</h5>
+                        <div class="row align-items-center justify-content-center g-3">
+                            <div class="col-4">
+                                <div class="wing-card {% if aile == 'gauche' %}active{% endif %}">
+                                    <i class="bi bi-arrow-left-circle-fill wing-icon"></i>
+                                    <div class="wing-title">Aile Gauche</div><div class="wing-desc">Salles Impaires</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="building-container">
+                                    {% for i in range(4, -1, -1) %}
+                                        <div class="etage-bloc {% if i == etage_courant %}active{% endif %}">
+                                            {% if i == 0 %}RDC{% else %}Étage {{ i }}{% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="wing-card {% if aile == 'droite' %}active{% endif %}">
+                                    <i class="bi bi-arrow-right-circle-fill wing-icon"></i>
+                                    <div class="wing-title">Aile Droite</div><div class="wing-desc">Salles Paires</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="alert alert-light border shadow-sm mt-5 text-start mx-auto" style="max-width: 500px;">
+                            <h4 class="fw-bold text-primary mb-2">
+                                <i class="bi bi-geo-alt-fill"></i> {% if etage_courant == 0 %}RDC{% else %}Étage {{ etage_courant }}{% endif %} - Aile {{ aile|capitalize }}
+                            </h4>
+                            <p class="mb-0 text-muted">Prenez l'ascenseur jusqu'au niveau <strong>{{ etage_courant }}</strong>, puis dirigez-vous vers la <strong>{{ aile }}</strong>.</p>
+                        </div>
+                    </div>
+                </div>
+
+                {# ── ONGLET PHOTOS (Proposition D) ── #}
+                {% if photos %}
+                <div class="tab-pane fade" id="photos-tab">
+                    <div class="pt-2">
+                        {# Grille avec photo vedette (Proposition C) ── #}
+                        {% if photos|length == 1 %}
+                            {# Une seule photo : pleine largeur ── #}
+                            <div class="photo-thumb mb-3" style="max-height:380px;" onclick="openLightbox(0)">
+                                <img src="{{ url_for('static', filename='uploads/salles/' + photos[0].filename) }}"
+                                     alt="{{ photos[0].legende or infos.nom_complet }}" loading="lazy"
+                                     style="border-radius:14px;">
+                                {% if photos[0].legende %}<div class="legende-overlay">{{ photos[0].legende }}</div>{% endif %}
+                            </div>
+                        {% elif photos|length == 2 %}
+                            {# Deux photos : côte à côte ── #}
+                            <div class="row g-2 mb-3">
+                                {% for photo in photos %}
+                                <div class="col-6">
+                                    <div class="photo-thumb" onclick="openLightbox({{ loop.index0 }})">
+                                        <img src="{{ url_for('static', filename='uploads/salles/' + photo.filename) }}"
+                                             alt="{{ photo.legende or infos.nom_complet }}" loading="lazy">
+                                        {% if photo.legende %}<div class="legende-overlay">{{ photo.legende }}</div>{% endif %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            {# 3+ photos : vedette à gauche + grille à droite ── #}
+                            <div class="row g-2 mb-3">
+                                {# Colonne gauche : photo vedette (2 lignes de haut) ── #}
+                                <div class="col-7">
+                                    <div class="photo-thumb" style="aspect-ratio:3/2; height:100%; max-height:340px;" onclick="openLightbox(0)">
+                                        <img src="{{ url_for('static', filename='uploads/salles/' + photos[0].filename) }}"
+                                             alt="{{ photos[0].legende or infos.nom_complet }}" loading="lazy">
+                                        {% if photos[0].legende %}<div class="legende-overlay">{{ photos[0].legende }}</div>{% endif %}
+                                    </div>
+                                </div>
+                                {# Colonne droite : 2 vignettes ── #}
+                                <div class="col-5 d-flex flex-column gap-2">
+                                    <div class="photo-thumb flex-fill" onclick="openLightbox(1)">
+                                        <img src="{{ url_for('static', filename='uploads/salles/' + photos[1].filename) }}"
+                                             alt="{{ photos[1].legende or infos.nom_complet }}" loading="lazy">
+                                        {% if photos[1].legende %}<div class="legende-overlay">{{ photos[1].legende }}</div>{% endif %}
+                                    </div>
+                                    {% if photos|length == 3 %}
+                                        {# Exactement 3 photos : 3e vignette normale ── #}
+                                        <div class="photo-thumb flex-fill" onclick="openLightbox(2)">
+                                            <img src="{{ url_for('static', filename='uploads/salles/' + photos[2].filename) }}"
+                                                 alt="{{ photos[2].legende or infos.nom_complet }}" loading="lazy">
+                                            {% if photos[2].legende %}<div class="legende-overlay">{{ photos[2].legende }}</div>{% endif %}
+                                        </div>
+                                    {% else %}
+                                        {# 4+ photos : vignette "+N" qui ouvre la lightbox ── #}
+                                        <div class="photo-thumb flex-fill position-relative" onclick="openLightbox(2)" style="cursor:pointer;">
+                                            <img src="{{ url_for('static', filename='uploads/salles/' + photos[2].filename) }}"
+                                                 alt="{{ photos[2].legende or infos.nom_complet }}" loading="lazy"
+                                                 style="filter: brightness(0.45);">
+                                            <div class="position-absolute top-50 start-50 translate-middle text-white text-center" style="z-index:2;">
+                                                <div style="font-size:1.5rem; font-weight:700; line-height:1;">+{{ photos|length - 2 }}</div>
+                                                <div style="font-size:0.7rem; opacity:0.85;">photos</div>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        {# Petite galerie des photos restantes (si 4+) ── #}
+                        {% if photos|length > 3 %}
+                        <div class="photo-gallery mt-2">
+                            {% for photo in photos %}
+                            {% if loop.index0 > 2 %}
+                            <div class="photo-thumb" onclick="openLightbox({{ loop.index0 }})">
+                                <img src="{{ url_for('static', filename='uploads/salles/' + photo.filename) }}"
+                                     alt="{{ photo.legende or infos.nom_complet }}" loading="lazy">
+                                {% if photo.legende %}<div class="legende-overlay">{{ photo.legende }}</div>{% endif %}
+                            </div>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
+
+    </div>{# fin col-lg-8 #}
+</div>
+
+{# Lightbox (globale, en dehors du flux) #}
+{% if photos %}
+<div id="lightbox">
+    <span class="lb-close" onclick="closeLightbox()">&times;</span>
+    <span class="lb-nav lb-prev" onclick="lbNav(-1)">&#8249;</span>
+    <img id="lbImg" src="" alt="">
+    <div class="lb-caption" id="lbCaption"></div>
+    <span class="lb-nav lb-next" onclick="lbNav(1)">&#8250;</span>
+</div>
+{% endif %}
+
+{# ── MODAL SIGNALEMENT ── #}
+<div class="modal fade" id="modalSignalement" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold">⚠️ Signaler un problème</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="/signaler/{{ nom }}" method="POST">
+                <div class="modal-body">
+                    <p class="text-muted small">Décrivez le problème pour la maintenance.</p>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Type</label>
+                        <select class="form-select" name="type_probleme" required>
+                            <option value="Matériel Info">💻 Panne PC / Écran</option>
+                            <option value="Vidéo-Projecteur">📽️ Vidéo-Projecteur</option>
+                            <option value="Mobilier">🪑 Mobilier cassé</option>
+                            <option value="Ménage">🧹 Ménage / Propreté</option>
+                            <option value="Autre">📝 Autre</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Description</label>
+                        <textarea class="form-control" name="description" rows="3" placeholder="Ex: Le PC 12 ne démarre pas..." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-danger rounded-pill px-4">Envoyer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    const allEvents = {{ planning | tojson }};
+    const currentUserId = {{ current_user.id | tojson }};
+
+    function formatDateISO(date) { return date.toISOString().split('T')[0]; }
+
+    function initDateBar() {
+        const container = document.getElementById('date-container');
+        const today = new Date();
+        for (let i = 0; i < 15; i++) {
+            let d = new Date(); d.setDate(today.getDate() + i);
+            let isoDate = formatDateISO(d);
+            let jourNom = d.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '');
+            let jourNum = d.toLocaleDateString('fr-FR', { day: 'numeric' });
+            let btn = document.createElement('div');
+            btn.className = `date-btn ${i === 0 ? 'active' : ''}`;
+            btn.innerHTML = `<div class="jour-nom">${jourNom}</div><div class="jour-num">${jourNum}</div>`;
+            btn.onclick = () => selectDate(isoDate, btn);
+            container.appendChild(btn);
+        }
+        renderEvents(formatDateISO(today));
+    }
+
+    function selectDate(dateIso, btnElement) {
+        document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('active'));
+        btnElement.classList.add('active');
+        renderEvents(dateIso);
+    }
+
+    /* ── Utilitaires temps ── */
+    function timeToMin(hhmm) {
+        const [h, m] = hhmm.trim().split(':').map(Number);
+        return h * 60 + m;
+    }
+
+    /* ── Calcul des colonnes pour les chevauchements ──
+       Algorithme : on assigne à chaque event une colonne (0-based)
+       et on calcule le nombre total de colonnes dans son « groupe ».
+    */
+    function computeColumns(events) {
+        // Trie par heure de début
+        const sorted = [...events].sort((a, b) => a.startMin - b.startMin);
+
+        // columns[i] = { col, totalCols } pour sorted[i]
+        const cols = sorted.map(() => ({ col: 0, totalCols: 1 }));
+
+        // Pour chaque event, on regarde quels events se chevauchent avec lui
+        for (let i = 0; i < sorted.length; i++) {
+            // Liste des colonnes déjà occupées par les events qui chevauchent sorted[i]
+            const usedCols = new Set();
+            for (let j = 0; j < i; j++) {
+                if (sorted[j].endMin > sorted[i].startMin) {
+                    // sorted[j] chevauche sorted[i]
+                    usedCols.add(cols[j].col);
+                }
+            }
+            // Trouve la première colonne libre
+            let col = 0;
+            while (usedCols.has(col)) col++;
+            cols[i].col = col;
+        }
+
+        // Calcule totalCols par groupe de chevauchement
+        for (let i = 0; i < sorted.length; i++) {
+            // Un event appartient au même groupe que tous ceux qui le chevauchent
+            let maxCol = cols[i].col;
+            for (let j = 0; j < sorted.length; j++) {
+                if (i !== j && sorted[j].startMin < sorted[i].endMin && sorted[j].endMin > sorted[i].startMin) {
+                    maxCol = Math.max(maxCol, cols[j].col);
+                }
+            }
+            cols[i].totalCols = maxCol + 1;
+        }
+
+        // Renvoie un Map event.id → { col, totalCols }
+        const map = new Map();
+        sorted.forEach((ev, i) => map.set(ev._idx, cols[i]));
+        return map;
+    }
+
+    function renderEvents(dateIso) {
+        const container = document.getElementById('cours-container');
+        const titre = document.getElementById('date-titre');
+        container.innerHTML = '';
+        const optionsDate = { weekday: 'long', day: 'numeric', month: 'long' };
+        titre.innerText = new Date(dateIso + 'T12:00:00').toLocaleDateString('fr-FR', optionsDate).replace(/^\w/, c => c.toUpperCase());
+
+        const rawEvents = allEvents.filter(e => e.date_iso === dateIso);
+
+        if (rawEvents.length === 0) {
+            container.innerHTML = `<div class="text-center py-5 text-muted">
+                <i class="bi bi-cup-hot h1 text-secondary" style="opacity:0.3"></i>
+                <p class="mt-3 fw-light">Aucun cours prévu.</p>
+                <a href="/reserver/{{ nom }}" class="btn btn-outline-success rounded-pill px-4">
+                    <i class="bi bi-calendar-plus me-1"></i> Réserver ce créneau
+                </a>
+            </div>`;
+            return;
+        }
+
+        const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+        const mutedColor = isDark ? '#9ca3af' : '#6c757d';
+        const labelColor = isDark ? '#d1d5db' : '#374151';
+        const lineColor  = isDark ? '#374151' : '#f0f0f0';
+        const nowLineCol = '#ef4444';
+
+        // Enrichit chaque event avec startMin / endMin
+        const events = rawEvents.map((e, i) => {
+            const [hStart, hEnd] = e.horaire.split('-');
+            return { ...e, _idx: i, startMin: timeToMin(hStart), endMin: timeToMin(hEnd) };
+        });
+
+        // Plage horaire affichée
+        const SLOT_H = 60; // px par heure
+        const minStart = Math.max(0,  Math.floor(Math.min(...events.map(e => e.startMin)) / 60) - 0) * 60;
+        const maxEnd   = Math.min(24 * 60, Math.ceil( Math.max(...events.map(e => e.endMin))   / 60) + 1) * 60;
+        const totalMin = maxEnd - minStart;
+        const totalPx  = (totalMin / 60) * SLOT_H;
+
+        // Colonnes chevauchement
+        const colMap = computeColumns(events);
+
+        // ── Wrapper principal ──
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = `position:relative; display:flex; gap:0;`;
+
+        // ── Colonne des heures (gauche) ──
+        const labelCol = document.createElement('div');
+        labelCol.style.cssText = `width:52px; flex-shrink:0; position:relative; height:${totalPx}px; margin-top:-10px;`;
+
+        for (let t = minStart; t <= maxEnd; t += 60) {
+            const top = ((t - minStart) / 60) * SLOT_H;
+            const label = document.createElement('div');
+            label.style.cssText = `position:absolute; top:${top - 10}px; right:8px; font-size:0.7rem; font-weight:600; color:${labelColor}; white-space:nowrap; user-select:none;`;
+            const h = Math.floor(t / 60);
+            label.textContent = h < 24 ? `${String(h).padStart(2,'0')}:00` : '';
+            labelCol.appendChild(label);
+        }
+        wrapper.appendChild(labelCol);
+
+        // ── Zone des événements ──
+        const evZone = document.createElement('div');
+        evZone.style.cssText = `flex:1; position:relative; height:${totalPx}px; min-width:0;`;
+
+        // Lignes horizontales des heures
+        for (let t = minStart; t <= maxEnd; t += 60) {
+            const top = ((t - minStart) / 60) * SLOT_H;
+            const line = document.createElement('div');
+            line.style.cssText = `position:absolute; left:0; right:0; top:${top}px; height:1px; background:${lineColor}; z-index:0;`;
+            evZone.appendChild(line);
+        }
+
+        // Ligne "maintenant"
+        const now = new Date();
+        const nowISO = now.toISOString().split('T')[0];
+        if (nowISO === dateIso) {
+            const nowMin = now.getHours() * 60 + now.getMinutes();
+            if (nowMin >= minStart && nowMin <= maxEnd) {
+                const nowTop = ((nowMin - minStart) / 60) * SLOT_H;
+                const nowLine = document.createElement('div');
+                nowLine.style.cssText = `position:absolute; left:0; right:0; top:${nowTop}px; height:2px; background:${nowLineCol}; z-index:10; border-radius:1px;`;
+                const nowDot = document.createElement('div');
+                nowDot.style.cssText = `position:absolute; left:-5px; top:-4px; width:10px; height:10px; border-radius:50%; background:${nowLineCol};`;
+                nowLine.appendChild(nowDot);
+                evZone.appendChild(nowLine);
+            }
+        }
+
+        // ── Rendu des événements ──
+        events.forEach(cours => {
+            const isReservation = cours.type === 'reservation';
+            const isMine = isReservation && cours.user === currentUserId;
+            const isParticipant = !isMine && isReservation && cours.participants &&
+                cours.participants.some(p => p.username === currentUserId);
+
+            let cardBg, borderLeft, textCol, badgeHtml, dotBg;
+            if (!isReservation) {
+                cardBg    = isDark ? '#1f2937' : '#eff6ff';
+                borderLeft= '3px solid #3b82f6';
+                textCol   = isDark ? '#93c5fd' : '#1d4ed8';
+                dotBg     = '#3b82f6';
+                badgeHtml = '';
+            } else if (isMine) {
+                cardBg    = isDark ? 'rgba(34,197,94,0.13)' : '#f0fdf4';
+                borderLeft= '3px solid #22c55e';
+                textCol   = isDark ? '#86efac' : '#166534';
+                dotBg     = '#22c55e';
+                badgeHtml = `<span style="font-size:0.6rem;background:rgba(34,197,94,0.2);color:${textCol};padding:1px 6px;border-radius:20px;">📌 Moi</span>`;
+            } else if (isParticipant) {
+                cardBg    = isDark ? 'rgba(168,85,247,0.13)' : '#faf5ff';
+                borderLeft= '3px solid #a855f7';
+                textCol   = isDark ? '#d8b4fe' : '#6b21a8';
+                dotBg     = '#a855f7';
+                badgeHtml = `<span style="font-size:0.6rem;background:rgba(168,85,247,0.2);color:${textCol};padding:1px 6px;border-radius:20px;">👥 Participant</span>`;
+            } else {
+                cardBg    = isDark ? 'rgba(234,179,8,0.1)' : '#fefce8';
+                borderLeft= '3px solid #eab308';
+                textCol   = isDark ? '#fde68a' : '#854d0e';
+                dotBg     = '#eab308';
+                badgeHtml = `<span style="font-size:0.6rem;background:rgba(234,179,8,0.2);color:${textCol};padding:1px 6px;border-radius:20px;">📌 Résa</span>`;
+            }
+
+            const { col, totalCols } = colMap.get(cours._idx);
+            const GAP = 3; // px entre colonnes
+            const pct = 100 / totalCols;
+            const left  = `calc(${col * pct}% + ${col > 0 ? GAP : 0}px)`;
+            const width = `calc(${pct}% - ${col > 0 ? GAP : 0}px - ${col < totalCols - 1 ? GAP : 0}px)`;
+
+            const top    = ((cours.startMin - minStart) / 60) * SLOT_H;
+            const height = Math.max(((cours.endMin - cours.startMin) / 60) * SLOT_H - 2, 22);
+
+            const div = document.createElement('div');
+            div.style.cssText = `
+                position:absolute;
+                top:${top}px;
+                left:${left};
+                width:${width};
+                height:${height}px;
+                border-radius:8px;
+                background:${cardBg};
+                border-left:${borderLeft};
+                padding:4px 7px;
+                overflow:hidden;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+                cursor:default;
+                z-index:2;
+                transition: box-shadow 0.15s, transform 0.15s;
+                box-sizing:border-box;
+            `;
+            div.onmouseenter = () => { div.style.boxShadow = '0 4px 16px rgba(0,0,0,0.18)'; div.style.transform = 'translateY(-1px)'; div.style.zIndex = 20; };
+            div.onmouseleave = () => { div.style.boxShadow = '0 1px 4px rgba(0,0,0,0.08)'; div.style.transform = ''; div.style.zIndex = 2; };
+
+            // Contenu de la carte
+            const titleEl = document.createElement('div');
+            titleEl.style.cssText = `font-weight:700; font-size:0.75rem; color:${textCol}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.3;`;
+            titleEl.textContent = cours.titre;
+
+            const timeEl = document.createElement('div');
+            timeEl.style.cssText = `font-size:0.65rem; color:${mutedColor}; line-height:1.2; margin-top:1px;`;
+            timeEl.textContent = cours.horaire.replace('-', ' → ');
+
+            div.appendChild(titleEl);
+            div.appendChild(timeEl);
+
+            // Badge + infos supplémentaires si assez de place
+            if (height > 55) {
+                if (badgeHtml) {
+                    const badgeEl = document.createElement('div');
+                    badgeEl.style.cssText = 'margin-top:3px;';
+                    badgeEl.innerHTML = badgeHtml;
+                    div.appendChild(badgeEl);
+                }
+                if (isReservation && cours.nom_org && height > 75) {
+                    const orgEl = document.createElement('div');
+                    orgEl.style.cssText = `font-size:0.62rem; color:${mutedColor}; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;`;
+                    orgEl.innerHTML = `<i class="bi bi-person-fill me-1"></i>${cours.nom_org}`;
+                    div.appendChild(orgEl);
+                }
+                if (isReservation && cours.motif && height > 95) {
+                    const motifEl = document.createElement('div');
+                    motifEl.style.cssText = `font-size:0.6rem; color:${mutedColor}; margin-top:2px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;`;
+                    motifEl.innerHTML = `<i class="bi bi-chat-left-text me-1"></i>${cours.motif}`;
+                    div.appendChild(motifEl);
+                }
+                if (isReservation && cours.nb_personnes && height > 115) {
+                    const nbEl = document.createElement('div');
+                    nbEl.style.cssText = `font-size:0.6rem; color:${mutedColor}; margin-top:2px;`;
+                    nbEl.innerHTML = `<i class="bi bi-people me-1"></i>${cours.nb_personnes} personne${cours.nb_personnes > 1 ? 's' : ''}`;
+                    div.appendChild(nbEl);
+                }
+            }
+
+            // Tooltip natif pour avoir l'info complète au survol
+            let tooltipParts = [cours.titre, cours.horaire.replace('-',' → ')];
+            if (cours.nom_org)  tooltipParts.push('👤 ' + cours.nom_org);
+            if (cours.motif)    tooltipParts.push('💬 ' + cours.motif);
+            if (cours.nb_personnes) tooltipParts.push('👥 ' + cours.nb_personnes + ' personne' + (cours.nb_personnes > 1 ? 's' : ''));
+            if (cours.participants && cours.participants.length)
+                tooltipParts.push('Participants : ' + cours.participants.map(p => p.nom_complet || p.username).join(', '));
+            div.title = tooltipParts.join('\n');
+
+            evZone.appendChild(div);
+        });
+
+        wrapper.appendChild(evZone);
+        container.appendChild(wrapper);
+    }
+
+    // ── LIGHTBOX ──
+    {% if photos %}
+    const lbPhotos = [
+        {% for photo in photos %}
+        { src: "{{ url_for('static', filename='uploads/salles/' + photo.filename) }}", caption: {{ photo.legende | tojson }} }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+    let lbCurrent = 0;
+
+    function openLightbox(index) {
+        lbCurrent = index;
+        showLbPhoto();
+        document.getElementById('lightbox').classList.add('open');
+        document.body.style.overflow = 'hidden';
+    }
+    function closeLightbox() {
+        document.getElementById('lightbox').classList.remove('open');
+        document.body.style.overflow = '';
+    }
+    function showLbPhoto() {
+        document.getElementById('lbImg').src = lbPhotos[lbCurrent].src;
+        document.getElementById('lbCaption').textContent = lbPhotos[lbCurrent].caption || '';
+    }
+    function lbNav(dir) {
+        lbCurrent = (lbCurrent + dir + lbPhotos.length) % lbPhotos.length;
+        showLbPhoto();
+    }
+    document.addEventListener('keydown', (e) => {
+        const lb = document.getElementById('lightbox');
+        if (!lb.classList.contains('open')) return;
+        if (e.key === 'Escape') closeLightbox();
+        if (e.key === 'ArrowLeft') lbNav(-1);
+        if (e.key === 'ArrowRight') lbNav(1);
+    });
+    document.getElementById('lightbox').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('lightbox')) closeLightbox();
+    });
+    {% endif %}
+
+    // Auto-dismiss toasts
+    document.addEventListener('DOMContentLoaded', () => {
+        initDateBar();
+        document.querySelectorAll('.toast').forEach(toastEl => {
+            setTimeout(() => {
+                const bsToast = bootstrap.Toast.getOrCreateInstance(toastEl);
+                bsToast.hide();
+            }, 4000);
+        });
+    });
+</script>
+{% endblock %}

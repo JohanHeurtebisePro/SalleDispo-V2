@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="fr" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {# ── Priorité : données du site si vue /tv/<id>, sinon établissement global ── #}
+    {% if site is defined and site %}
+      {% set couleur = site.couleur or '#0d6efd' %}
+      {% set nom_etab = site.nom or 'DISPO SALLES' %}
+      {% set is_site_view = true %}
+    {% else %}
+      {% set couleur = etablissement.etablissement_couleur or '#0d6efd' %}
+      {% set nom_etab = etablissement.etablissement_nom or 'DISPO SALLES' %}
+      {% set is_site_view = false %}
+    {% endif %}
+    <title>{{ nom_etab }} — Affichage Dynamique</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    
+    <style>
+        :root {
+            --tv-accent: {{ couleur }};
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000;
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tv-header {
+            padding: 20px 40px;
+            background: #111;
+            border-bottom: 2px solid #222;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+            height: 100px;
+            flex-shrink: 0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            {% if is_site_view %}
+            border-top: 3px solid {{ couleur }};
+            {% endif %}
+        }
+
+        .tv-clock { 
+            font-size: 3.5rem; 
+            font-weight: 900; 
+            color: var(--tv-accent); 
+            font-variant-numeric: tabular-nums;
+            text-shadow: 0 0 15px color-mix(in srgb, var(--tv-accent) 40%, transparent);
+        }
+        
+        .tv-date { 
+            font-size: 1.4rem; 
+            color: #888; 
+            text-transform: uppercase; 
+            letter-spacing: 2px; 
+            font-weight: 600;
+        }
+
+        /* Badge "Mis à jour" dans le header */
+        .tv-updated {
+            font-size: 0.8rem;
+            color: #555;
+            font-weight: 500;
+            margin-top: 4px;
+        }
+
+        .tv-grid-container {
+            flex-grow: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tv-grid {
+            padding: 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            padding-bottom: 80px;
+        }
+
+        .tv-card {
+            background: #1a1a1a;
+            border-radius: 18px;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            border: 2px solid transparent;
+            min-height: 200px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            animation: fadeIn 0.8s ease-out forwards;
+            opacity: 0;
+        }
+
+        .status-libre {
+            border-color: #198754;
+            background: radial-gradient(circle at top right, rgba(25, 135, 84, 0.2), #1a1a1a 70%);
+            box-shadow: 0 0 30px rgba(25, 135, 84, 0.15);
+        }
+
+        .status-bientot {
+            border-color: #fd7e14;
+            background: radial-gradient(circle at top right, rgba(253, 126, 20, 0.15), #1a1a1a 70%);
+        }
+
+        .status-occupe {
+            border-color: #dc2626;
+            background: radial-gradient(circle at top right, rgba(220, 38, 38, 0.25), #1a0505 70%);
+            box-shadow: 0 0 35px rgba(220, 38, 38, 0.2), inset 0 0 60px rgba(220, 38, 38, 0.05);
+        }
+
+        .status-reserve {
+            border-color: #eab308;
+            background: radial-gradient(circle at top right, rgba(234, 179, 8, 0.15), #1a1a1a 70%);
+        }
+
+        .status-partiel {
+            border-color: #06b6d4;
+            background: radial-gradient(circle at top right, rgba(6, 182, 212, 0.15), #1a1a1a 70%);
+        }
+
+        .status-bloque {
+            border-color: #374151;
+            background: #111827;
+            opacity: 0.75;
+        }
+
+        .room-name { 
+            font-size: 2.1rem;
+            font-weight: 900; 
+            line-height: 1.1;
+            margin-bottom: 10px; 
+            letter-spacing: -1px;
+            white-space: normal; 
+            word-wrap: break-word;
+            overflow: visible; 
+            text-overflow: clip; 
+        }
+
+        .room-info { font-size: 1.1rem; color: #aaa; font-weight: 500; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .room-status { font-size: 1.5rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+        .progress-tv { height: 8px; background: #333; border-radius: 4px; margin-top: 15px; overflow: hidden; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .refresh-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            height: 4px;
+            background: var(--tv-accent);
+            width: 0%;
+            z-index: 100;
+            transition: width linear;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="tv-header">
+        <div class="d-flex align-items-center gap-4">
+            <div class="rounded-4 p-3" style="background: color-mix(in srgb, {{ couleur }} 15%, transparent);">
+                <i class="bi bi-grid-fill" style="font-size: 2.5rem; color: {{ couleur }};"></i>
+            </div>
+            <div>
+                {# Nom affiché : site si vue filtrée, sinon établissement #}
+                {% if is_site_view %}
+                  <div class="d-flex align-items-center gap-2 mb-1">
+                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{{ couleur }};flex-shrink:0;box-shadow:0 0 8px {{ couleur }}88;"></span>
+                    <span style="font-size:0.75rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:{{ couleur }};">{{ nom_etab }}</span>
+                  </div>
+                  <h1 class="m-0 fw-bold lh-1" style="font-size: 2.2rem; letter-spacing: -1px;">
+                    SALLES DISPONIBLES
+                  </h1>
+                {% else %}
+                  <h1 class="m-0 fw-bold lh-1" style="font-size: 2.2rem; letter-spacing: -1px;">{{ nom_etab | upper }}</h1>
+                {% endif %}
+                <span class="tv-date" id="dateDisplay">CHARGEMENT...</span>
+                {# ─── HORODATAGE DE DERNIÈRE MISE À JOUR (données serveur) ─── #}
+                <div class="tv-updated">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    Données chargées à <strong>{{ heure_maj }}</strong> — actualisation dans <span id="countdown">2:00</span>
+                </div>
+            </div>
+        </div>
+        <div class="tv-clock" id="clockDisplay">--:--</div>
+    </div>
+
+    <div class="tv-grid-container" id="scrollContainer">
+        <div class="tv-grid">
+            
+            {% for salle in salles %}
+                {% if salle.status.etat == "LIBRE" %}
+                    <div class="tv-card status-libre" style="animation-delay: {{ loop.index0 * 0.05 }}s;">
+                        <div>
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="room-name text-white">{{ salle.infos.nom_complet.replace('Salle ', '') }}</div>
+                                <i class="bi bi-check-circle-fill text-success ms-2" style="font-size: 2.2rem; flex-shrink: 0;"></i>
+                            </div>
+                            <div class="room-info mt-2">
+                                <span class="badge bg-dark border border-secondary">Étage {{ salle.infos.etage_calc }}</span>
+                                {% if salle.infos.pc %}<i class="bi bi-pc-display"></i> PC{% endif %}
+                                {% if salle.infos.projecteur %}<i class="bi bi-projector"></i> TV{% endif %}
+                            </div>
+                        </div>
+                        <div>
+                            <div class="room-status text-success mt-3">DISPONIBLE</div>
+                            <div class="small text-white opacity-75">{{ salle.status.sub_msg }}</div>
+                            {% if salle.status.prochaine_resa %}
+                            <div class="mt-2 d-flex align-items-center gap-2" style="font-size: 0.72rem; opacity: 0.45; color: #eab308; border-top: 1px solid rgba(234,179,8,0.15); padding-top: 6px;">
+                                <i class="bi bi-calendar2-check" style="flex-shrink:0;"></i>
+                                <span>Résa {{ salle.status.prochaine_resa.debut }} → {{ salle.status.prochaine_resa.fin }}{% if salle.status.prochaine_resa.nb_personnes > 1 %} · {{ salle.status.prochaine_resa.nb_personnes }}p{% endif %}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                {% elif salle.status.etat == "PARTIEL" %}
+                    <div class="tv-card status-reserve" style="animation-delay: {{ loop.index0 * 0.05 }}s;">
+                        <div>
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="room-name text-white">{{ salle.infos.nom_complet.replace('Salle ', '') }}</div>
+                                <i class="bi bi-people-fill ms-2" style="font-size: 2.2rem; flex-shrink: 0; color:#eab308;"></i>
+                            </div>
+                            <div class="room-info mt-2">
+                                <span class="badge bg-dark border border-secondary">Étage {{ salle.infos.etage_calc }}</span>
+                                {% if salle.infos.pc %}<i class="bi bi-pc-display"></i> PC{% endif %}
+                            </div>
+                        </div>
+                        <div>
+                            <div class="room-status mt-3" style="color:#eab308;">
+                                {{ salle.status.places_restantes }} PLACE{{ 'S' if salle.status.places_restantes > 1 }} LIBRE{{ 'S' if salle.status.places_restantes > 1 }}
+                            </div>
+                            <div class="small text-white opacity-75">
+                                {{ salle.status.nb_resas }} réservation{{ 's' if salle.status.nb_resas > 1 }} · {{ salle.status.places_occupees }}/{{ salle.status.places_totales }} places
+                            </div>
+                            <div class="progress-tv">
+                                <div class="h-100" style="width: {{ ((salle.status.places_occupees / salle.status.places_totales) * 100)|round|int }}%; background:#eab308;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                {% elif salle.status.etat == "RÉSERVÉ" %}
+                    <div class="tv-card status-reserve" style="animation-delay: {{ loop.index0 * 0.05 }}s;">
+                        <div>
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="room-name text-white">{{ salle.infos.nom_complet.replace('Salle ', '') }}</div>
+                                <i class="bi bi-person-check-fill ms-2" style="font-size: 2.2rem; flex-shrink: 0; color:#eab308;"></i>
+                            </div>
+                            <div class="room-info mt-2" style="font-size:1.1rem;">
+                                <i class="bi bi-calendar2-check" style="color:#eab308;"></i>
+                                <span style="color:#fde68a; font-weight:700;">{{ salle.status.nb_resas }} réservation{{ 's' if salle.status.nb_resas > 1 }} en cours</span>
+                            </div>
+                            {% if salle.status.resa_participants %}
+                            <div class="room-info mt-1" style="font-size:0.85rem; opacity:0.65; flex-wrap:wrap; gap:4px;">
+                                <i class="bi bi-people"></i>
+                                {% for p in salle.status.resa_participants %}
+                                <span style="background:rgba(234,179,8,0.15);border-radius:6px;padding:1px 6px;">{{ p.nom_complet or p.username }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <div class="room-status mt-3" style="color:#eab308;">RÉSERVÉE</div>
+                            <div class="small text-white opacity-75 d-flex align-items-center gap-2 flex-wrap">
+                                {% if salle.status.places_restantes is defined and salle.status.places_restantes == 0 and salle.status.places_totales %}
+                                    <span>Fin à {{ salle.status.sub_msg.split(' · ')[0].replace('Fin à ','') if ' · ' in salle.status.sub_msg else salle.status.sub_msg }}</span>
+                                    <span>· 0 place dispo</span>
+                                    {% if salle.status.resa_duree_min %}
+                                    <span style="opacity:0.6;">
+                                        {% set h = salle.status.resa_duree_min // 60 %}{% set m = salle.status.resa_duree_min % 60 %}{% if h %}{{ h }}h{% endif %}{% if m %}{{ m }}min{% endif %}
+                                    </span>
+                                    {% endif %}
+                                {% else %}
+                                    {{ salle.status.sub_msg }}
+                                    {% if salle.status.resa_duree_min %}
+                                    <span style="opacity:0.6;">
+                                        {% set h = salle.status.resa_duree_min // 60 %}{% set m = salle.status.resa_duree_min % 60 %}{% if h %}{{ h }}h{% endif %}{% if m %}{{ m }}min{% endif %}
+                                    </span>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                            <div class="progress-tv">
+                                <div class="h-100" style="width: {{ salle.status.progression }}%; background:#eab308;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                {% elif salle.status.etat == "BLOQUÉ" %}
+                    <div class="tv-card status-bloque" style="animation-delay: {{ loop.index0 * 0.05 }}s;">
+                        <div>
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="room-name text-muted">{{ salle.infos.nom_complet.replace('Salle ', '') }}</div>
+                                <i class="bi bi-lock-fill ms-2" style="font-size: 2.2rem; flex-shrink: 0; color:#6b7280;"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="room-status mt-3" style="color:#6b7280;">BLOQUÉE</div>
+                            <div class="small opacity-75" style="color:#9ca3af;">{{ salle.status.sub_msg }}</div>
+                        </div>
+                    </div>
+
+                {% elif salle.status.etat == "OCCUPÉ" and salle.status.progression > 85 %}
+                    <div class="tv-card status-bientot" style="animation-delay: {{ loop.index0 * 0.05 }}s;">
+                        <div>
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="room-name text-white">{{ salle.infos.nom_complet.replace('Salle ', '') }}</div>
+                                <span class="badge bg-warning text-dark fw-bold fs-6 mt-1 ms-2">Bientôt</span>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-warning fw-bold small mb-1">{{ salle.status.sub_msg }}</div>
+                            <div class="progress-tv">
+                                <div class="h-100 bg-warning" style="width: {{ salle.status.progression }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                {% else %}
+                    <div class="tv-card status-occupe" style="animation-delay: {{ loop.index0 * 0.05 }}s;">
+                        <div>
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="room-name text-white">{{ salle.infos.nom_complet.replace('Salle ', '') }}</div>
+                                <i class="bi bi-x-circle-fill ms-2" style="font-size: 2.2rem; flex-shrink: 0; color:#dc2626;"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="room-status mt-3" style="color:#ef4444;">OCCUPÉE</div>
+                            <div class="text-danger fw-bold small mb-1">{{ salle.status.sub_msg }}</div>
+                            <div class="progress-tv">
+                                <div class="h-100 bg-danger" style="width: {{ salle.status.progression }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            {% endfor %}
+
+        </div>
+    </div>
+
+    <div class="refresh-bar" id="refreshBar"></div>
+
+    <script>
+        // HORLOGE
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clockDisplay').textContent = now.toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
+            document.getElementById('dateDisplay').textContent = now.toLocaleDateString('fr-FR', {weekday: 'long', day: 'numeric', month: 'long'});
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // COMPTE À REBOURS avant reload
+        const RELOAD_TIME = 120; // secondes
+        let remaining = RELOAD_TIME;
+        const countdownEl = document.getElementById('countdown');
+
+        // Vérifie que la session est toujours active avant de recharger.
+        // Si la session a expiré (redirect vers /login), on y va proprement
+        // plutôt que d'afficher une page cassée.
+        async function checkSessionAndReload() {
+            try {
+                const res = await fetch('/tv', { method: 'HEAD', redirect: 'manual' });
+                // opaqueredirect = Flask-Login a renvoyé un 302 vers /login
+                if (res.type === 'opaqueredirect' || res.status === 401 || res.status === 403) {
+                    window.location.href = '/login?next=/tv';
+                } else {
+                    window.location.reload();
+                }
+            } catch {
+                window.location.reload(); // fallback : erreur réseau temporaire
+            }
+        }
+
+        function updateCountdown() {
+            remaining--;
+            const m = Math.floor(remaining / 60);
+            const s = String(remaining % 60).padStart(2, '0');
+            countdownEl.textContent = `${m}:${s}`;
+            if (remaining <= 0) checkSessionAndReload();
+        }
+        setInterval(updateCountdown, 1000);
+
+        // BARRE DE PROGRESSION RELOAD
+        const refreshBar = document.getElementById('refreshBar');
+        refreshBar.style.transition = `width ${RELOAD_TIME * 1000}ms linear`;
+        setTimeout(() => { refreshBar.style.width = '100%'; }, 100);
+
+        // AUTO-SCROLL
+        const container = document.getElementById('scrollContainer');
+        const scrollSpeedDesc = 1; 
+        const scrollSpeedAsc = 2;  
+        const pauseTime = 5000;    
+        let direction = 1; 
+        let isPaused = false;
+
+        function autoScroll() {
+            if (container.scrollHeight <= container.clientHeight) return;
+            if (isPaused) return;
+            if (direction === 1) {
+                container.scrollTop += scrollSpeedDesc;
+                if (container.scrollTop + container.clientHeight >= container.scrollHeight - 2) {
+                    isPaused = true;
+                    setTimeout(() => { direction = -1; isPaused = false; }, pauseTime);
+                }
+            } else {
+                container.scrollTop -= scrollSpeedAsc;
+                if (container.scrollTop <= 0) {
+                    isPaused = true;
+                    setTimeout(() => { direction = 1; isPaused = false; }, pauseTime);
+                }
+            }
+        }
+
+        setTimeout(() => { setInterval(autoScroll, 20); }, 3000);
+    </script>
+</body>
+</html>

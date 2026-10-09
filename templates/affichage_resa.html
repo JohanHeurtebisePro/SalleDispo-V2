@@ -1,0 +1,1303 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* ── TIMELINE ── */
+    .timeline-item {
+        position: relative;
+        padding-left: 36px;
+    }
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: 11px;
+        top: 42px;
+        bottom: -12px;
+        width: 2px;
+        background: var(--bs-border-color);
+        opacity: 0.4;
+    }
+    .timeline-item:last-child::before { display: none; }
+
+    .timeline-dot {
+        position: absolute;
+        left: 0;
+        top: 14px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.65rem;
+        flex-shrink: 0;
+    }
+
+    /* ── FILTRE ACTIF ── */
+    .filter-btn { transition: 0.15s; }
+    .filter-btn.active { font-weight: 700; }
+
+    /* ── CARTE RÉSERVATION ── */
+    .resa-card {
+        border-radius: 16px;
+        transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .resa-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.09) !important; }
+
+    /* ── BARRE DE PROGRESSION ── */
+    .resa-progress {
+        height: 4px;
+        border-radius: 2px;
+        background: var(--bs-secondary-bg);
+        overflow: hidden;
+        margin-top: 8px;
+    }
+    .resa-progress-bar {
+        height: 100%;
+        border-radius: 2px;
+        transition: width 0.5s ease;
+    }
+
+    /* ── STATS HEADER ── */
+    .stat-pill {
+        border-radius: 50px;
+        padding: 10px 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex: 1;
+        min-width: 120px;
+    }
+    .stat-pill .stat-num {
+        font-size: 1.6rem;
+        font-weight: 900;
+        line-height: 1;
+    }
+    .stat-pill .stat-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        opacity: 0.7;
+    }
+
+    /* ── META ROW ── */
+    .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 16px;
+        font-size: 0.78rem;
+        color: var(--bs-secondary-color);
+        margin-top: 6px;
+    }
+    .meta-row .meta-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+    }
+
+    /* ── ID BADGE ── */
+    .id-badge {
+        font-family: monospace;
+        font-size: 0.62rem;
+        padding: 2px 7px;
+        border-radius: 4px;
+        background: var(--bs-secondary-bg);
+        color: var(--bs-secondary-color);
+        border: 1px solid var(--bs-border-color);
+        cursor: pointer;
+        transition: background 0.15s;
+        user-select: all;
+    }
+    .id-badge:hover { background: var(--bs-tertiary-bg); }
+
+    /* ── DURÉE BADGE ── */
+    .duree-badge {
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 2px 10px;
+        border-radius: 20px;
+        background: rgba(var(--bs-secondary-rgb), 0.1);
+        color: var(--bs-secondary-color);
+        white-space: nowrap;
+    }
+
+    /* ── ACCORDÉON DÉTAILS ── */
+    .detail-toggle {
+        background: none;
+        border: none;
+        font-size: 0.72rem;
+        color: var(--bs-secondary-color);
+        cursor: pointer;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        transition: color 0.15s;
+    }
+    .detail-toggle:hover { color: var(--bs-primary); }
+    .detail-panel {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid var(--bs-border-color);
+        font-size: 0.78rem;
+    }
+
+    /* ── SALLE LINK ── */
+    .salle-link {
+        font-size: 1.05rem;
+        font-weight: 800;
+        text-decoration: none;
+        color: inherit;
+    }
+    .salle-link:hover { color: var(--bs-primary); }
+
+    /* ── COLLAPSE ICON ── */
+    .chevron-icon { transition: transform 0.2s; }
+    [aria-expanded="true"] .chevron-icon { transform: rotate(180deg); }
+
+    /* ══════════════════════════════════════════
+       PLANNING HEBDOMADAIRE (Ma semaine)
+    ══════════════════════════════════════════ */
+
+    /* Navigation semaine */
+    .week-nav-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 7px 16px; border-radius: 50px;
+        border: 1px solid var(--bs-border-color);
+        background: var(--bs-body-bg);
+        color: var(--bs-body-color);
+        font-size: 0.82rem; font-weight: 600;
+        text-decoration: none;
+        transition: background 0.15s, box-shadow 0.15s, transform 0.15s;
+    }
+    .week-nav-btn:hover {
+        background: var(--bs-primary);
+        color: #fff; border-color: var(--bs-primary);
+        box-shadow: 0 4px 12px rgba(13,110,253,0.25);
+        transform: translateY(-1px);
+        text-decoration: none;
+    }
+    .week-today-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 7px 16px; border-radius: 50px;
+        border: 1px solid var(--bs-primary);
+        background: rgba(13,110,253,0.08);
+        color: var(--bs-primary);
+        font-size: 0.82rem; font-weight: 600;
+        text-decoration: none;
+        transition: background 0.15s, box-shadow 0.15s;
+    }
+    .week-today-btn:hover {
+        background: var(--bs-primary); color: #fff;
+        box-shadow: 0 4px 12px rgba(13,110,253,0.25);
+        text-decoration: none;
+    }
+
+    /* En-têtes des jours */
+    .cal-day-header {
+        text-align: center;
+        padding: 8px 4px 10px;
+        border-bottom: 2px solid var(--bs-border-color);
+        position: sticky;
+        top: 0;
+        background: var(--bs-body-bg);
+        z-index: 5;
+    }
+    .cal-day-header .day-name {
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        color: var(--bs-secondary-color);
+    }
+    .cal-day-header .day-num {
+        font-size: 1.35rem;
+        font-weight: 800;
+        line-height: 1.2;
+        color: var(--bs-body-color);
+    }
+    .cal-day-header.today .day-num {
+        background: var(--bs-primary);
+        color: white;
+        border-radius: 50%;
+        width: 36px; height: 36px;
+        display: inline-flex; align-items: center; justify-content: center;
+        margin: 0 auto;
+    }
+    .cal-day-header.today .day-name { color: var(--bs-primary); }
+
+    /* Grille calendrier */
+    .cal-grid {
+        display: grid;
+        grid-template-columns: 48px repeat(5, 1fr);
+        overflow-x: auto;
+        min-width: 560px;
+    }
+    .cal-time-gutter {
+        grid-column: 1;
+        border-right: 1px solid var(--bs-border-color);
+    }
+    .cal-day-col {
+        border-right: 1px solid var(--bs-border-color);
+        position: relative;
+    }
+    .cal-day-col:last-child { border-right: none; }
+
+    /* Lignes d'heures */
+    .cal-hour-label {
+        position: absolute;
+        right: 8px;
+        font-size: 0.62rem;
+        font-weight: 600;
+        color: var(--bs-secondary-color);
+        user-select: none;
+        white-space: nowrap;
+        transform: translateY(-50%);
+    }
+    .cal-hour-line {
+        position: absolute; left: 0; right: 0;
+        height: 1px;
+        background: var(--bs-border-color);
+        opacity: 0.5;
+    }
+    .cal-half-line {
+        position: absolute; left: 0; right: 0;
+        height: 1px;
+        background: var(--bs-border-color);
+        opacity: 0.2;
+        border-top: 1px dashed var(--bs-border-color);
+    }
+
+    /* Événements dans la grille */
+    .cal-event {
+        position: absolute;
+        border-radius: 7px;
+        padding: 4px 7px;
+        overflow: hidden;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        cursor: default;
+        z-index: 2;
+        transition: box-shadow 0.15s, transform 0.15s, z-index 0s;
+        box-sizing: border-box;
+    }
+    .cal-event:hover {
+        box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+        transform: translateY(-1px);
+        z-index: 20;
+    }
+    .cal-event-title {
+        font-weight: 700;
+        font-size: 0.72rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.3;
+    }
+    .cal-event-time {
+        font-size: 0.62rem;
+        line-height: 1.2;
+        margin-top: 1px;
+        opacity: 0.75;
+    }
+    .cal-event-room {
+        font-size: 0.6rem;
+        margin-top: 2px;
+        opacity: 0.7;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Ligne "maintenant" */
+    .now-line {
+        position: absolute; left: 0; right: 0;
+        height: 2px; background: #ef4444;
+        border-radius: 1px; z-index: 10;
+        pointer-events: none;
+    }
+    .now-dot {
+        position: absolute; left: -5px; top: -4px;
+        width: 10px; height: 10px;
+        border-radius: 50%; background: #ef4444;
+    }
+
+    /* Légende */
+    .cal-legend-dot {
+        width: 10px; height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        flex-shrink: 0;
+    }
+
+    /* Vide état */
+    .cal-empty-col {
+        opacity: 0.25;
+    }
+
+    /* Dark mode ajustements planning */
+    [data-bs-theme="dark"] .week-nav-btn {
+        background: #1f2937; border-color: #374151; color: #e5e7eb;
+    }
+    [data-bs-theme="dark"] .week-today-btn {
+        background: rgba(59,130,246,0.12);
+    }
+    [data-bs-theme="dark"] .cal-day-header {
+        background: var(--bs-body-bg);
+    }
+</style>
+
+{# ── FLASH MESSAGES ── #}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 2000;">
+      {% for category, message in messages %}
+        <div class="toast align-items-center text-white bg-{{ 'success' if category == 'success' else ('danger' if category == 'danger' else 'warning') }} border-0 show mb-2"
+             role="alert" aria-live="assertive" aria-atomic="true">
+          <div class="d-flex">
+            <div class="toast-body fw-semibold">{{ message }}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+{# ── EN-TÊTE & STATS ── #}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+    <div>
+        <h4 class="fw-bold mb-1"><i class="bi bi-calendar2-week me-2 text-primary"></i>Mes réservations</h4>
+        <p class="text-muted small mb-0">Retrouvez ici toutes vos réservations passées, à venir et annulées.</p>
+    </div>
+    <a href="/" class="btn btn-outline-secondary rounded-pill px-4">
+        <i class="bi bi-building me-1"></i>Réserver une salle
+    </a>
+</div>
+
+<div class="alert border-0 rounded-4 py-2 px-3 mb-4 d-flex align-items-center gap-2 small" style="background: rgba(255, 193, 7, 0.1);">
+    <i class="bi bi-exclamation-triangle-fill text-warning flex-shrink-0"></i>
+    <span>Les réservations sont <strong>à titre indicatif</strong> et ne garantissent pas l'exclusivité de la salle. D'autres personnes peuvent être présentes en même temps.</span>
+</div>
+
+{# STATS #}
+{% set total_duree_min = 0 %}
+{% for r in resas_passees %}{% set total_duree_min = total_duree_min + r.duree_min %}{% endfor %}
+{% for r in resas_futures %}{% set total_duree_min = total_duree_min + r.duree_min %}{% endfor %}
+{% set total_h = total_duree_min // 60 %}{% set total_m = total_duree_min % 60 %}
+
+<div class="d-flex gap-3 flex-wrap mb-4">
+    <div class="stat-pill glass">
+        <div class="bg-primary bg-opacity-10 text-primary rounded-3 p-2 flex-shrink-0">
+            <i class="bi bi-calendar-check fs-5"></i>
+        </div>
+        <div>
+            <div class="stat-num text-primary">{{ resas_futures|length }}</div>
+            <div class="stat-label">À venir</div>
+        </div>
+    </div>
+    <div class="stat-pill glass">
+        <div class="bg-success bg-opacity-10 text-success rounded-3 p-2 flex-shrink-0">
+            <i class="bi bi-clock-history fs-5"></i>
+        </div>
+        <div>
+            <div class="stat-num text-success">{{ resas_passees|length }}</div>
+            <div class="stat-label">Passées</div>
+        </div>
+    </div>
+    <div class="stat-pill glass">
+        <div class="bg-danger bg-opacity-10 text-danger rounded-3 p-2 flex-shrink-0">
+            <i class="bi bi-calendar-x fs-5"></i>
+        </div>
+        <div>
+            <div class="stat-num text-danger">{{ resas_annulees|length }}</div>
+            <div class="stat-label">Annulées</div>
+        </div>
+    </div>
+    {% if total_h > 0 or total_m > 0 %}
+    <div class="stat-pill glass">
+        <div class="bg-warning bg-opacity-10 text-warning rounded-3 p-2 flex-shrink-0">
+            <i class="bi bi-hourglass-split fs-5"></i>
+        </div>
+        <div>
+            <div class="stat-num text-warning" style="font-size:1.2rem;">{% if total_h %}{{ total_h }}h{% endif %}{% if total_m %}{{ total_m }}m{% endif %}</div>
+            <div class="stat-label">Total réservé</div>
+        </div>
+    </div>
+    {% endif %}
+    {% set nb_inv = resas_futures|selectattr('role','equalto','participant')|list|length + resas_passees|selectattr('role','equalto','participant')|list|length %}
+    {% if nb_inv > 0 %}
+    <div class="stat-pill glass">
+        <div class="rounded-3 p-2 flex-shrink-0" style="background:rgba(111,66,193,0.1);color:#6f42c1;">
+            <i class="bi bi-person-plus fs-5"></i>
+        </div>
+        <div>
+            <div class="stat-num" style="color:#6f42c1;">{{ nb_inv }}</div>
+            <div class="stat-label">Invitations</div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{# ── ONGLETS ── #}
+<ul class="nav nav-pills mb-4 gap-2 flex-wrap" id="resaTabs">
+    <li class="nav-item">
+        <button class="nav-link active filter-btn rounded-pill px-4" data-bs-toggle="pill" data-bs-target="#tab-futures">
+            <i class="bi bi-calendar-event me-1"></i>À venir
+            {% if resas_futures %}<span class="badge bg-primary ms-1 rounded-pill">{{ resas_futures|length }}</span>{% endif %}
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link filter-btn rounded-pill px-4" data-bs-toggle="pill" data-bs-target="#tab-semaine">
+            <i class="bi bi-grid-3x3-gap me-1"></i>Ma semaine
+            {% if planning_semaine.events %}<span class="badge ms-1 rounded-pill" style="background:rgba(16,185,129,0.2);color:#059669;">{{ planning_semaine.events|length }}</span>{% endif %}
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link filter-btn rounded-pill px-4" data-bs-toggle="pill" data-bs-target="#tab-passees">
+            <i class="bi bi-clock-history me-1"></i>Passées
+            {% if resas_passees %}<span class="badge bg-secondary ms-1 rounded-pill">{{ resas_passees|length }}</span>{% endif %}
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link filter-btn rounded-pill px-4" data-bs-toggle="pill" data-bs-target="#tab-annulees">
+            <i class="bi bi-x-circle me-1"></i>Annulées
+            {% if resas_annulees %}<span class="badge bg-danger ms-1 rounded-pill">{{ resas_annulees|length }}</span>{% endif %}
+        </button>
+    </li>
+</ul>
+
+{# ══════════════════════════════════
+   MACRO : carte réservation complète
+   ══════════════════════════════════ #}
+{% macro resa_meta(r, collapsed_id) %}
+    {# ── Ligne 1 : salle + durée + rôle ── #}
+    <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+        <a href="/salle/{{ r.salle }}" class="salle-link">Salle {{ r.salle }}</a>
+
+        {# Durée #}
+        {% set h = r.duree_min // 60 %}{% set m = r.duree_min % 60 %}
+        <span class="duree-badge">
+            <i class="bi bi-hourglass me-1"></i>{% if h %}{{ h }}h{% endif %}{% if m %}{{ m }}min{% endif %}
+        </span>
+
+        {# Rôle #}
+        {% if r.role == 'participant' %}
+        <span class="badge rounded-pill px-2 py-1"
+              style="background:rgba(111,66,193,0.12);color:#6f42c1;font-size:0.68rem;font-weight:700;">
+            <i class="bi bi-person-plus me-1"></i>Invité
+        </span>
+        {% else %}
+        <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-2 py-1"
+              style="font-size:0.68rem;font-weight:700;">
+            <i class="bi bi-person-check me-1"></i>Organisateur
+        </span>
+        {% endif %}
+
+        {# Créé par admin #}
+        {% if r.cree_par_admin %}
+        <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 rounded-pill"
+              style="font-size:0.65rem;" title="Créée par l'administrateur">
+            <i class="bi bi-shield-check me-1"></i>Admin
+        </span>
+        {% endif %}
+
+        {# ID court (pour copie) #}
+        <span class="id-badge" title="Cliquer pour copier l'identifiant" onclick="copyId(this, '{{ r.id }}')">
+            #{{ r.id[:8] }}
+        </span>
+    </div>
+
+    {# ── Ligne 2 : dates / heures ── #}
+    <div class="meta-row">
+        <span class="meta-item fw-semibold" style="color:inherit;">
+            <i class="bi bi-calendar3"></i>
+            {{ r.date_debut_fmt }}
+        </span>
+        <span class="meta-item">
+            <i class="bi bi-arrow-right"></i>
+            {{ r.date_fin_fmt }}
+        </span>
+        {% if r.date_creation %}
+        <span class="meta-item" title="Date de création de la réservation">
+            <i class="bi bi-pencil-square"></i>
+            Créée le {{ r.date_creation[8:10] }}/{{ r.date_creation[5:7] }}/{{ r.date_creation[0:4] }}
+            à {{ r.date_creation[11:16] }}
+        </span>
+        {% endif %}
+    </div>
+
+    {# ── Motif ── #}
+    <div class="mt-2 d-flex align-items-start gap-2">
+        <i class="bi bi-chat-left-quote text-muted flex-shrink-0 mt-1" style="font-size:0.8rem;"></i>
+        <span class="small" title="{{ r.motif }}">{{ r.motif }}</span>
+    </div>
+
+    {# ── Nb personnes + organisateur ── #}
+    <div class="meta-row mt-1">
+        <span class="meta-item">
+            <i class="bi bi-people-fill"></i>
+            {{ r.nb_personnes or 1 }} personne{{ 's' if (r.nb_personnes or 1) > 1 }}
+        </span>
+        {% if r.role == 'participant' %}
+        <span class="meta-item" style="color:#6f42c1;">
+            <i class="bi bi-person-fill"></i>
+            Organisé par <strong>{{ r.nom_org }}</strong>
+        </span>
+        {% endif %}
+    </div>
+
+    {# ── Participants ── #}
+    {% if r.participants %}
+    <div class="mt-2 d-flex flex-wrap gap-1 align-items-center">
+        <span class="small text-muted me-1"><i class="bi bi-people me-1"></i>Participants :</span>
+        {% for p in r.participants %}
+        <span class="badge rounded-pill" style="background:rgba(13,110,253,0.09);color:#0d6efd;font-size:0.66rem;">
+            <i class="bi bi-person me-1"></i>{{ p.nom_complet or p.username }}
+        </span>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# ── Détails supplémentaires (collapsible) ── #}
+    <div class="mt-2">
+        <button class="detail-toggle" type="button"
+                data-bs-toggle="collapse" data-bs-target="#detail-{{ collapsed_id }}"
+                aria-expanded="false">
+            <i class="bi bi-chevron-down chevron-icon"></i>
+            Détails techniques
+        </button>
+        <div class="collapse detail-panel" id="detail-{{ collapsed_id }}">
+            <div class="row g-2">
+                <div class="col-sm-6">
+                    <div class="text-muted" style="font-size:0.7rem; text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Identifiant complet</div>
+                    <code style="font-size:0.72rem; word-break:break-all;">{{ r.id }}</code>
+                </div>
+                <div class="col-sm-6">
+                    <div class="text-muted" style="font-size:0.7rem; text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Statut</div>
+                    <span class="small fw-semibold">{{ r.statut | capitalize }}</span>
+                </div>
+                {% if r.date_creation %}
+                <div class="col-sm-6">
+                    <div class="text-muted" style="font-size:0.7rem; text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Créée le</div>
+                    <span class="small">{{ r.date_creation[0:16] | replace('T', ' à ') }}</span>
+                </div>
+                {% endif %}
+                <div class="col-sm-6">
+                    <div class="text-muted" style="font-size:0.7rem; text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Nb personnes déclarées</div>
+                    <span class="small">{{ r.nb_personnes or 1 }}</span>
+                </div>
+                {% if r.cree_par_admin %}
+                <div class="col-12">
+                    <div class="text-muted" style="font-size:0.7rem; text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Source</div>
+                    <span class="small text-warning"><i class="bi bi-shield-check me-1"></i>Créée par l'administrateur</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endmacro %}
+
+
+<div class="tab-content">
+
+    {# ══════════════════════════════════════════════
+       TAB À VENIR
+       ══════════════════════════════════════════════ #}
+    <div class="tab-pane fade show active" id="tab-futures">
+        {% if resas_futures %}
+
+            {# ── Bannière prochaine réservation ── #}
+            {% set prochaine = resas_futures[0] %}
+            <div class="glass rounded-4 p-4 mb-4" style="border-left: 4px solid #0d6efd;">
+                <div class="d-flex align-items-start gap-4 flex-wrap">
+                    <div class="bg-primary bg-opacity-10 text-primary rounded-3 p-3 flex-shrink-0">
+                        <i class="bi bi-alarm fs-4"></i>
+                    </div>
+                    <div class="flex-grow-1 min-w-0">
+                        <div class="text-muted small text-uppercase fw-bold mb-2" style="font-size:0.7rem; letter-spacing:1px;">
+                            Prochaine réservation
+                        </div>
+                        {{ resa_meta(prochaine, 'p-' ~ prochaine.id) }}
+                    </div>
+                    {% if prochaine.role == 'organisateur' %}
+                    <form action="/annuler/{{ prochaine.id }}" method="POST"
+                          onsubmit="return confirm('Annuler cette réservation ?')" class="flex-shrink-0">
+                        <input type="hidden" name="next" value="/mes-reservations">
+                        <button class="btn btn-outline-danger rounded-pill px-4">
+                            <i class="bi bi-x-circle me-1"></i>Annuler
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# ── Timeline des suivantes ── #}
+            {% if resas_futures|length > 1 %}
+            <h6 class="text-muted small text-uppercase fw-bold mb-3 mt-2" style="letter-spacing: 1px;">
+                Réservations suivantes
+            </h6>
+            <div class="d-flex flex-column gap-3">
+                {% for r in resas_futures[1:] %}
+                <div class="timeline-item">
+                    <div class="timeline-dot {% if r.role == 'participant' %}{% else %}bg-primary bg-opacity-10 text-primary{% endif %}"
+                         style="{% if r.role == 'participant' %}background:rgba(111,66,193,0.15);color:#6f42c1;{% endif %}">
+                        <i class="bi bi-{% if r.role == 'participant' %}person-plus{% else %}calendar-check{% endif %}"></i>
+                    </div>
+                    <div class="glass resa-card p-3">
+                        <div class="d-flex align-items-start gap-3 flex-wrap">
+                            <div class="flex-grow-1 min-w-0">
+                                {{ resa_meta(r, 'f-' ~ r.id) }}
+                            </div>
+                            {% if r.role == 'organisateur' %}
+                            <form action="/annuler/{{ r.id }}" method="POST"
+                                  onsubmit="return confirm('Annuler cette réservation ?')" class="flex-shrink-0">
+                                <input type="hidden" name="next" value="/mes-reservations">
+                                <button class="btn btn-sm btn-outline-danger rounded-pill">
+                                    <i class="bi bi-x-circle me-1"></i>Annuler
+                                </button>
+                            </form>
+                            {% else %}
+                            <span class="text-muted flex-shrink-0" style="font-size:0.72rem;">Via l'organisateur</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+        {% else %}
+            <div class="glass rounded-4 p-5 text-center text-muted">
+                <i class="bi bi-calendar-x display-4 opacity-25"></i>
+                <p class="mt-3 mb-2">Aucune réservation à venir.</p>
+                <a href="/" class="btn btn-primary rounded-pill px-4">
+                    <i class="bi bi-plus-circle me-1"></i>Réserver une salle
+                </a>
+            </div>
+        {% endif %}
+    </div>
+
+    {# ══════════════════════════════════════════════
+       TAB MA SEMAINE — VUE CALENDRIER
+       ══════════════════════════════════════════════ #}
+    <div class="tab-pane fade" id="tab-semaine">
+
+        {# ── Navigation semaine ── #}
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+            <div class="d-flex align-items-center gap-2">
+                <a href="/mes-reservations?semaine={{ semaine_offset - 1 }}#tab-semaine"
+                   class="week-nav-btn" id="btnSemPrev" onclick="rememberTab()">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+                {% if semaine_offset != 0 %}
+                <a href="/mes-reservations?semaine=0#tab-semaine"
+                   class="week-today-btn" onclick="rememberTab()">
+                    <i class="bi bi-calendar-day me-1"></i>Aujourd'hui
+                </a>
+                {% endif %}
+                <a href="/mes-reservations?semaine={{ semaine_offset + 1 }}#tab-semaine"
+                   class="week-nav-btn" id="btnSemNext" onclick="rememberTab()">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </div>
+            <div class="text-center">
+                <div class="fw-bold" style="font-size:1rem;">
+                    {% set lundi = planning_semaine.lundi %}
+                    {% set vendredi = planning_semaine.fin_semaine %}
+                    Semaine du {{ lundi.strftime('%d') }} au {{ vendredi.strftime('%d %B %Y') }}
+                </div>
+                {% if semaine_offset == 0 %}
+                <div class="text-muted small"><i class="bi bi-dot text-success"></i>Semaine en cours</div>
+                {% elif semaine_offset > 0 %}
+                <div class="text-muted small">Dans {{ semaine_offset }} semaine{{ 's' if semaine_offset > 1 }}</div>
+                {% else %}
+                <div class="text-muted small">Il y a {{ -semaine_offset }} semaine{{ 's' if semaine_offset < -1 }}</div>
+                {% endif %}
+            </div>
+            <div class="d-flex gap-3 align-items-center flex-wrap" style="font-size:0.75rem;">
+                <span class="d-flex align-items-center gap-1">
+                    <span class="cal-legend-dot" style="background:#22c55e;"></span>
+                    <span class="text-muted">Mes réservations</span>
+                </span>
+                <span class="d-flex align-items-center gap-1">
+                    <span class="cal-legend-dot" style="background:#a855f7;"></span>
+                    <span class="text-muted">Invitations</span>
+                </span>
+            </div>
+        </div>
+
+        {# ── Calendrier ── #}
+        <div class="glass rounded-4 overflow-hidden mb-4" style="border-radius:16px !important;">
+            {# Injection des données au JS #}
+            <script>
+                const CAL_EVENTS   = {{ planning_semaine.events | tojson }};
+                const CAL_USER_ID  = {{ current_user.id | tojson }};
+                const CAL_LUNDI_ISO = {{ planning_semaine.lundi.strftime('%Y-%m-%d') | tojson }};
+                const CAL_OFFSET   = {{ semaine_offset }};
+            </script>
+
+            {# Container du calendrier — rempli par JS #}
+            <div id="calWeekContainer" style="padding: 0 0 16px;">
+                {# Skeleton / spinner en attente du JS #}
+                <div id="calLoadingSkl" class="text-center py-5 text-muted">
+                    <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                    Chargement du planning…
+                </div>
+            </div>
+        </div>
+
+        {# ── Résumé textuel sous le calendrier ── #}
+        {% if planning_semaine.events %}
+        <div class="glass rounded-4 p-3">
+            <div class="fw-semibold small mb-2 text-muted text-uppercase" style="font-size:0.68rem;letter-spacing:1px;">
+                <i class="bi bi-list-ul me-1"></i>Détail de la semaine ({{ planning_semaine.events|length }} événement{{ 's' if planning_semaine.events|length > 1 }})
+            </div>
+            <div class="d-flex flex-column gap-2">
+            {% for ev in planning_semaine.events %}
+                <div class="d-flex align-items-center gap-3 py-1" style="border-bottom:1px solid var(--bs-border-color);">
+                    <div class="flex-shrink-0 text-center" style="width:52px;">
+                        <div class="small fw-bold">{{ ev.date_iso[8:10] }}/{{ ev.date_iso[5:7] }}</div>
+                        <div class="text-muted" style="font-size:0.65rem;">
+                            {% set jours_fr = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'] %}
+                            {{ ev.horaire.replace('-', '→') }}
+                        </div>
+                    </div>
+                    <div class="flex-shrink-0" style="width:4px;height:36px;border-radius:4px;
+                        background:{% if ev.role == 'participant' %}#a855f7{% else %}#22c55e{% endif %};"></div>
+                    <div class="flex-grow-1 min-w-0">
+                        <div class="fw-semibold small text-truncate">
+                            <a href="/salle/{{ ev.salle }}" class="text-decoration-none" style="color:inherit;">
+                                Salle {{ ev.salle }}
+                            </a>
+                        </div>
+                        <div class="text-muted" style="font-size:0.7rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            <i class="bi bi-chat-left-text me-1"></i>{{ ev.motif }}
+                        </div>
+                    </div>
+                    <div class="flex-shrink-0">
+                        {% if ev.role == 'participant' %}
+                        <span class="badge rounded-pill px-2" style="background:rgba(168,85,247,0.12);color:#7e22ce;font-size:0.65rem;">
+                            <i class="bi bi-person-plus me-1"></i>Invité
+                        </span>
+                        {% else %}
+                        <span class="badge rounded-pill px-2 bg-success bg-opacity-10 text-success" style="font-size:0.65rem;">
+                            <i class="bi bi-person-check me-1"></i>Orga.
+                        </span>
+                        {% endif %}
+                    </div>
+                    {% if ev.role == 'organisateur' %}
+                    <form action="/annuler/{{ ev.id }}" method="POST"
+                          onsubmit="return confirm('Annuler cette réservation ?')" class="flex-shrink-0 ms-1">
+                        <input type="hidden" name="next" value="/mes-reservations?semaine={{ semaine_offset }}">
+                        <button class="btn btn-sm btn-outline-danger rounded-pill px-2 py-0" style="font-size:0.72rem;">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="glass rounded-4 p-5 text-center text-muted">
+            <i class="bi bi-calendar2 display-4 opacity-25"></i>
+            <p class="mt-3 mb-2">Aucune réservation cette semaine.</p>
+            <a href="/" class="btn btn-outline-primary rounded-pill px-4">
+                <i class="bi bi-plus-circle me-1"></i>Réserver une salle
+            </a>
+        </div>
+        {% endif %}
+
+    </div>{# /tab-semaine #}
+
+    {# ══════════════════════════════════════════════
+       TAB PASSÉES
+       ══════════════════════════════════════════════ #}
+    <div class="tab-pane fade" id="tab-passees">
+
+        {% if resas_passees %}
+        <div class="d-flex gap-3 align-items-center flex-wrap mb-4">
+            <div class="input-group rounded-3 overflow-hidden flex-grow-1" style="max-width: 380px;">
+                <span class="input-group-text bg-transparent border-end-0">
+                    <i class="bi bi-search text-muted"></i>
+                </span>
+                <input type="text" class="form-control border-start-0"
+                       id="filtrePassees"
+                       placeholder="Filtrer par salle, motif, participant…"
+                       oninput="filtrerPassees(this.value)">
+            </div>
+            {# Stats rapides des passées #}
+            {% set total_p = namespace(min=0) %}
+            {% for r in resas_passees %}{% set total_p.min = total_p.min + r.duree_min %}{% endfor %}
+            {% set ph = total_p.min // 60 %}{% set pm = total_p.min % 60 %}
+            <span class="text-muted small">
+                <i class="bi bi-hourglass me-1"></i>
+                Total passé : <strong>{% if ph %}{{ ph }}h{% endif %}{% if pm %}{{ pm }}min{% endif %}</strong>
+            </span>
+        </div>
+        {% endif %}
+
+        <div id="listePassees" class="d-flex flex-column gap-3">
+        {% if resas_passees %}
+            {% for r in resas_passees %}
+            <div class="glass resa-card p-3" style="opacity: 0.85;"
+                 data-filtre="{{ r.salle }} {{ r.motif }} {{ r.nom_org }} {% for p in r.participants %}{{ p.nom_complet or p.username }} {% endfor %}">
+
+                <div class="d-flex align-items-start gap-3 flex-wrap">
+                    {# Icône #}
+                    <div class="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0"
+                         style="width: 44px; height: 44px; margin-top: 2px;
+                         {% if r.role == 'participant' %}background:rgba(111,66,193,0.08);color:#6f42c1;
+                         {% else %}background:rgba(108,117,125,0.1);color:#6c757d;{% endif %}">
+                        <i class="bi bi-{% if r.role == 'participant' %}person-plus{% else %}calendar2-check{% endif %} fs-5"></i>
+                    </div>
+
+                    {# Contenu #}
+                    <div class="flex-grow-1 min-w-0">
+                        {{ resa_meta(r, 'h-' ~ r.id) }}
+                    </div>
+
+                    {# Badge statut #}
+                    <div class="flex-shrink-0 text-end">
+                        <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill">
+                            Terminée
+                        </span>
+                        <div class="text-muted mt-1" style="font-size:0.68rem;">
+                            {% set h = r.duree_min // 60 %}{% set m = r.duree_min % 60 %}
+                            {% if h %}{{ h }}h{% endif %}{% if m %}{{ m }}min{% endif %}
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="glass rounded-4 p-5 text-center text-muted">
+                <i class="bi bi-clock-history display-4 opacity-25"></i>
+                <p class="mt-3 mb-0">Aucune réservation passée.</p>
+            </div>
+        {% endif %}
+        </div>
+
+        <div id="filtreVide" class="glass rounded-4 p-5 text-center text-muted" style="display:none;">
+            <i class="bi bi-search display-4 opacity-25"></i>
+            <p class="mt-3 mb-0">Aucune réservation ne correspond à votre recherche.</p>
+        </div>
+    </div>
+
+    {# ══════════════════════════════════════════════
+       TAB ANNULÉES
+       ══════════════════════════════════════════════ #}
+    <div class="tab-pane fade" id="tab-annulees">
+        {% if resas_annulees %}
+            <div class="d-flex flex-column gap-3">
+            {% for r in resas_annulees %}
+            <div class="glass resa-card p-3" style="opacity: 0.65;">
+                <div class="d-flex align-items-start gap-3 flex-wrap">
+                    <div class="bg-danger bg-opacity-10 text-danger rounded-3 d-flex align-items-center justify-content-center flex-shrink-0"
+                         style="width: 44px; height: 44px; margin-top: 2px;">
+                        <i class="bi bi-calendar-x fs-5"></i>
+                    </div>
+                    <div class="flex-grow-1 min-w-0">
+                        {{ resa_meta(r, 'a-' ~ r.id) }}
+
+                        {# ── Infos d'annulation ── #}
+                        <div class="mt-2 pt-2" style="border-top: 1px dashed var(--bs-border-color);">
+                            <div class="d-flex flex-wrap gap-3" style="font-size:0.78rem;">
+                                {% if r.annulee_par %}
+                                <span class="text-danger">
+                                    <i class="bi bi-person-dash me-1"></i>
+                                    Annulée par <strong>{{ r.annulee_par }}</strong>
+                                </span>
+                                {% endif %}
+                                {% if r.date_annulation %}
+                                <span class="text-muted">
+                                    <i class="bi bi-clock me-1"></i>
+                                    Le {{ r.date_annulation[8:10] }}/{{ r.date_annulation[5:7] }}/{{ r.date_annulation[0:4] }}
+                                    à {{ r.date_annulation[11:16] }}
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex-shrink-0">
+                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill">
+                            Annulée
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            </div>
+        {% else %}
+            <div class="glass rounded-4 p-5 text-center text-muted">
+                <i class="bi bi-check-circle display-4 opacity-25 text-success"></i>
+                <p class="mt-3 mb-0">Aucune réservation annulée.</p>
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  Filtre dynamique (onglet Passées)
+// ══════════════════════════════════════════════════════════
+function filtrerPassees(q) {
+    const items = document.querySelectorAll('#listePassees [data-filtre]');
+    const vide  = document.getElementById('filtreVide');
+    let nb = 0;
+    items.forEach(el => {
+        const match = el.dataset.filtre.toLowerCase().includes(q.toLowerCase());
+        el.style.display = match ? '' : 'none';
+        if (match) nb++;
+    });
+    vide.style.display = nb === 0 && q.length > 0 ? 'block' : 'none';
+}
+
+// Copier l'ID complet de la réservation
+function copyId(el, id) {
+    navigator.clipboard.writeText(id).then(() => {
+        const orig = el.textContent;
+        el.textContent = '✓ Copié !';
+        setTimeout(() => { el.textContent = orig; }, 1500);
+    }).catch(() => {
+        el.textContent = id;
+        el.select?.();
+    });
+}
+
+// Mémoire de l'onglet actif lors des changements de semaine
+function rememberTab() {
+    sessionStorage.setItem('resaActiveTab', 'tab-semaine');
+}
+
+// Auto-dismiss toasts
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.toast').forEach(toastEl => {
+        setTimeout(() => bootstrap.Toast.getOrCreateInstance(toastEl).hide(), 4000);
+    });
+
+    // Restaurer l'onglet actif si navigation semaine
+    const savedTab = sessionStorage.getItem('resaActiveTab');
+    if (savedTab) {
+        sessionStorage.removeItem('resaActiveTab');
+        const btn = document.querySelector(`[data-bs-target="#${savedTab}"]`);
+        if (btn) btn.click();
+    }
+
+    // Activer l'onglet "Ma semaine" si ancre #tab-semaine dans l'URL
+    if (window.location.hash === '#tab-semaine') {
+        const btn = document.querySelector('[data-bs-target="#tab-semaine"]');
+        if (btn) btn.click();
+    }
+});
+
+// ══════════════════════════════════════════════════════════
+//  PLANNING HEBDOMADAIRE — rendu JS
+// ══════════════════════════════════════════════════════════
+(function () {
+    // Constantes layout
+    const SLOT_H   = 56;   // px par heure
+    const HOUR_MIN = 7;    // 07:00
+    const HOUR_MAX = 20;   // 20:00 (non inclus)
+    const TOTAL_H  = HOUR_MAX - HOUR_MIN;
+    const TOTAL_PX = TOTAL_H * SLOT_H;
+
+    // Jours de la semaine (Lun–Ven, 5 jours)
+    const JOURS_COURT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven'];
+    const JOURS_LONG  = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
+
+    // Construire les 5 dates ISO de la semaine (lun→ven) depuis CAL_LUNDI_ISO
+    function buildWeekDates(lundiIso) {
+        const lundi  = new Date(lundiIso + 'T12:00:00');
+        const dates  = [];
+        for (let i = 0; i < 5; i++) {
+            const d = new Date(lundi);
+            d.setDate(lundi.getDate() + i);
+            dates.push(d.toISOString().split('T')[0]);
+        }
+        return dates;
+    }
+
+    function timeToMin(hhmm) {
+        const [h, m] = hhmm.trim().split(':').map(Number);
+        return h * 60 + m;
+    }
+
+    // Algo de colonnes (anti-chevauchement) — même logique que detail.html
+    function computeColumns(events) {
+        const sorted = [...events].sort((a, b) => a.startMin - b.startMin);
+        const cols   = sorted.map(() => ({ col: 0, totalCols: 1 }));
+        for (let i = 0; i < sorted.length; i++) {
+            const used = new Set();
+            for (let j = 0; j < i; j++) {
+                if (sorted[j].endMin > sorted[i].startMin) used.add(cols[j].col);
+            }
+            let c = 0;
+            while (used.has(c)) c++;
+            cols[i].col = c;
+        }
+        for (let i = 0; i < sorted.length; i++) {
+            let maxC = cols[i].col;
+            for (let j = 0; j < sorted.length; j++) {
+                if (i !== j && sorted[j].startMin < sorted[i].endMin && sorted[j].endMin > sorted[i].startMin)
+                    maxC = Math.max(maxC, cols[j].col);
+            }
+            cols[i].totalCols = maxC + 1;
+        }
+        const map = new Map();
+        sorted.forEach((ev, i) => map.set(ev._idx, cols[i]));
+        return map;
+    }
+
+    function buildCalendar() {
+        const container = document.getElementById('calWeekContainer');
+        const skeleton  = document.getElementById('calLoadingSkl');
+        if (skeleton) skeleton.remove();
+
+        const isDark     = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+        const mutedCol   = isDark ? '#9ca3af' : '#6c757d';
+        const lineCol    = isDark ? '#374151' : '#f0f0f0';
+        const bodyBg     = isDark ? 'var(--bs-body-bg)' : '#ffffff';
+
+        const weekDates  = buildWeekDates(CAL_LUNDI_ISO);
+        const todayISO   = new Date().toISOString().split('T')[0];
+        const nowMin     = new Date().getHours() * 60 + new Date().getMinutes();
+
+        // ── Wrapper global ──
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'overflow-x:auto;';
+
+        const grid = document.createElement('div');
+        grid.className = 'cal-grid';
+        grid.style.cssText = `min-width:560px; position:relative;`;
+
+        // ── En-têtes (ligne 0) ──
+        // Gutter vide
+        const gutterHead = document.createElement('div');
+        gutterHead.style.cssText = `
+            grid-column:1; grid-row:1;
+            border-right:1px solid ${lineCol};
+            border-bottom:2px solid ${lineCol};
+            height:58px;
+        `;
+        grid.appendChild(gutterHead);
+
+        weekDates.forEach((iso, idx) => {
+            const d       = new Date(iso + 'T12:00:00');
+            const dayNum  = d.getDate();
+            const isToday = iso === todayISO;
+
+            const head = document.createElement('div');
+            head.className = 'cal-day-header' + (isToday ? ' today' : '');
+            head.style.cssText = `
+                grid-column:${idx + 2}; grid-row:1;
+                border-right:${idx < 4 ? '1px solid ' + lineCol : 'none'};
+            `;
+            head.innerHTML = `
+                <div class="day-name">${JOURS_COURT[idx]}</div>
+                <div class="day-num">${dayNum}</div>
+            `;
+            grid.appendChild(head);
+        });
+
+        // ── Colonne heures (gutter) + colonnes jours ──
+        // On crée un wrapper de body (row 2) pour tout le contenu horaire
+        const bodyRow = document.createElement('div');
+        bodyRow.style.cssText = `
+            grid-column:1 / -1; grid-row:2;
+            display:flex; position:relative;
+            height:${TOTAL_PX}px;
+        `;
+
+        // Gutter heures
+        const gutter = document.createElement('div');
+        gutter.style.cssText = `
+            width:48px; flex-shrink:0;
+            position:relative; height:${TOTAL_PX}px;
+            border-right:1px solid ${lineCol};
+        `;
+        for (let h = HOUR_MIN; h <= HOUR_MAX; h++) {
+            const top = (h - HOUR_MIN) * SLOT_H;
+            const lbl = document.createElement('div');
+            lbl.className = 'cal-hour-label';
+            lbl.style.top = top + 'px';
+            lbl.textContent = h < HOUR_MAX ? String(h).padStart(2,'0') + ':00' : '';
+            gutter.appendChild(lbl);
+
+            if (h < HOUR_MAX) {
+                const line = document.createElement('div');
+                line.className = 'cal-hour-line';
+                line.style.top = top + 'px';
+                gutter.appendChild(line);
+
+                const half = document.createElement('div');
+                half.className = 'cal-half-line';
+                half.style.top = (top + SLOT_H / 2) + 'px';
+                gutter.appendChild(half);
+            }
+        }
+        bodyRow.appendChild(gutter);
+
+        // Colonnes jours
+        weekDates.forEach((iso, idx) => {
+            const isToday    = iso === todayISO;
+            const dayEvents  = CAL_EVENTS
+                .filter(e => e.date_iso === iso)
+                .map((e, i) => {
+                    const [hStart, hEnd] = e.horaire.split('-');
+                    return {
+                        ...e, _idx: i,
+                        startMin: timeToMin(hStart),
+                        endMin:   timeToMin(hEnd),
+                    };
+                });
+
+            const col = document.createElement('div');
+            col.style.cssText = `
+                flex:1; position:relative; height:${TOTAL_PX}px;
+                border-right:${idx < 4 ? '1px solid ' + lineCol : 'none'};
+                background:${isToday ? (isDark ? 'rgba(59,130,246,0.04)' : 'rgba(59,130,246,0.025)') : 'transparent'};
+                min-width:0;
+            `;
+
+            // Lignes horizontales
+            for (let h = HOUR_MIN; h <= HOUR_MAX; h++) {
+                const top = (h - HOUR_MIN) * SLOT_H;
+                const ln  = document.createElement('div');
+                ln.style.cssText = `position:absolute;left:0;right:0;top:${top}px;height:1px;background:${lineCol};z-index:0;`;
+                col.appendChild(ln);
+                if (h < HOUR_MAX) {
+                    const hl = document.createElement('div');
+                    hl.style.cssText = `position:absolute;left:0;right:0;top:${top + SLOT_H/2}px;height:1px;background:${lineCol};opacity:0.35;z-index:0;`;
+                    col.appendChild(hl);
+                }
+            }
+
+            // Ligne maintenant
+            if (isToday && nowMin >= HOUR_MIN * 60 && nowMin < HOUR_MAX * 60) {
+                const nowTop = (nowMin - HOUR_MIN * 60) / 60 * SLOT_H;
+                const nLine  = document.createElement('div');
+                nLine.className = 'now-line';
+                nLine.style.top = nowTop + 'px';
+                const nDot   = document.createElement('div');
+                nDot.className = 'now-dot';
+                nLine.appendChild(nDot);
+                col.appendChild(nLine);
+            }
+
+            // Événements
+            const colMap = computeColumns(dayEvents);
+            dayEvents.forEach(ev => {
+                const isMe   = ev.role === 'organisateur';
+                const isInvit = ev.role === 'participant';
+
+                let bgCard, borderColor, textColor, badgeHtml;
+                if (isMe) {
+                    bgCard      = isDark ? 'rgba(34,197,94,0.13)' : '#f0fdf4';
+                    borderColor = '#22c55e';
+                    textColor   = isDark ? '#86efac' : '#166534';
+                    badgeHtml   = `<span style="font-size:0.55rem;background:rgba(34,197,94,0.2);color:${textColor};padding:1px 5px;border-radius:20px;">📌 Moi</span>`;
+                } else {
+                    bgCard      = isDark ? 'rgba(168,85,247,0.13)' : '#faf5ff';
+                    borderColor = '#a855f7';
+                    textColor   = isDark ? '#d8b4fe' : '#6b21a8';
+                    badgeHtml   = `<span style="font-size:0.55rem;background:rgba(168,85,247,0.2);color:${textColor};padding:1px 5px;border-radius:20px;">👥 Invité</span>`;
+                }
+
+                const { col: colN, totalCols } = colMap.get(ev._idx) || { col: 0, totalCols: 1 };
+                const GAP   = 2;
+                const pct   = 100 / totalCols;
+                const left  = `calc(${colN * pct}% + ${colN > 0 ? GAP : 2}px)`;
+                const width = `calc(${pct}% - ${colN > 0 ? GAP : 2}px - ${colN < totalCols - 1 ? GAP : 2}px)`;
+
+                // Clamp aux heures affichées
+                const startClamped = Math.max(ev.startMin, HOUR_MIN * 60);
+                const endClamped   = Math.min(ev.endMin,   HOUR_MAX * 60);
+                if (startClamped >= endClamped) return;
+
+                const top    = (startClamped - HOUR_MIN * 60) / 60 * SLOT_H;
+                const height = Math.max((endClamped - startClamped) / 60 * SLOT_H - 2, 20);
+
+                const evDiv  = document.createElement('div');
+                evDiv.className = 'cal-event';
+                evDiv.style.cssText = `
+                    top:${top}px; left:${left}; width:${width}; height:${height}px;
+                    background:${bgCard}; border-left:3px solid ${borderColor};
+                `;
+
+                const titleEl = document.createElement('div');
+                titleEl.className = 'cal-event-title';
+                titleEl.style.color = textColor;
+                titleEl.textContent = ev.salle ? 'Salle ' + ev.salle : ev.titre;
+                evDiv.appendChild(titleEl);
+
+                const timeEl = document.createElement('div');
+                timeEl.className = 'cal-event-time';
+                timeEl.style.color = mutedCol;
+                timeEl.textContent = ev.horaire.replace('-', ' → ');
+                evDiv.appendChild(timeEl);
+
+                if (height > 48) {
+                    const badgeEl = document.createElement('div');
+                    badgeEl.style.marginTop = '2px';
+                    badgeEl.innerHTML = badgeHtml;
+                    evDiv.appendChild(badgeEl);
+                }
+                if (height > 66 && ev.motif) {
+                    const motifEl = document.createElement('div');
+                    motifEl.className = 'cal-event-room';
+                    motifEl.style.color = mutedCol;
+                    motifEl.textContent = ev.motif;
+                    evDiv.appendChild(motifEl);
+                }
+
+                // Tooltip
+                let tip = [`Salle ${ev.salle}`, ev.horaire.replace('-', ' → ')];
+                if (ev.motif) tip.push('💬 ' + ev.motif);
+                if (ev.nom_org && isInvit) tip.push('👤 Organisé par ' + ev.nom_org);
+                if (ev.participants && ev.participants.length)
+                    tip.push('Participants : ' + ev.participants.map(p => p.nom_complet || p.username).join(', '));
+                evDiv.title = tip.join('\n');
+
+                // Clic → ouvre la salle
+                if (ev.salle) {
+                    evDiv.style.cursor = 'pointer';
+                    evDiv.addEventListener('click', () => { window.location.href = '/salle/' + ev.salle; });
+                }
+
+                col.appendChild(evDiv);
+            });
+
+            bodyRow.appendChild(col);
+        });
+
+        grid.appendChild(bodyRow);
+        wrapper.appendChild(grid);
+        container.appendChild(wrapper);
+    }
+
+    // Lance le rendu quand le DOM est prêt
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', buildCalendar);
+    } else {
+        buildCalendar();
+    }
+
+    // Rerender si changement de thème (dark/light)
+    const observer = new MutationObserver((muts) => {
+        muts.forEach(m => {
+            if (m.attributeName === 'data-bs-theme') {
+                const container = document.getElementById('calWeekContainer');
+                if (container) { container.innerHTML = ''; buildCalendar(); }
+            }
+        });
+    });
+    observer.observe(document.documentElement, { attributes: true });
+})();
+</script>
+
+{% endblock %}

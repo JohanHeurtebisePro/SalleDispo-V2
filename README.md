@@ -1,5 +1,7 @@
 # SalleDispo — Gestionnaire de salles en temps réel
 
+[![Architecture diagram](https://gitdiagram.com/diagram-badge.svg)](https://gitdiagram.com/johanheurtebisepro/salledispo-v2?utm_source=readme&utm_medium=badge)
+
 > **V2** — Réécriture complète du projet initial : passage d'un prototype fichier (JSON + ICS locaux) à une application multi-sites avec base de données relationnelle, comptes utilisateurs, réservation réelle et administration complète.
 
 ## Sommaire
